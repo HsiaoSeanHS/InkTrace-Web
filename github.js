@@ -74,6 +74,9 @@
     if (side === 'rough') {
       folders.push('潦草');
     }
+    else {
+      folders.push('工整')
+    }
     const path = [...folders, root.InkTrace.name(character)].map(encodeURIComponent).join('/');
     const endpoint = `/contents/${path}`;
     let sha;
