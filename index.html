@@ -53,10 +53,8 @@
         </div>
         <section class="writing-card">
           <div class="section-head">
-            <h1 id="paper-title">手寫稿紙</h1><span id="counter" class="counter">0 / 8 已完成</span>
+            <h1 id="paper-title">手寫稿紙</h1>
           </div>
-          <progress id="completion" max="8" value="0" aria-label="已上傳進度">
-          </progress>
           <div id="characters" class="characters" aria-label="選擇字元">
           </div>
           <div class="canvas-area">
@@ -73,6 +71,10 @@
                 <div class="board-heading">
                   <h2 id="regular-title">工整</h2><span>思源黑體 Thin 100</span>
                 </div>
+                <div class="board-progress">
+                  <span class="board-count"></span>
+                  <progress value="0" max="1" aria-label="工整上傳進度"></progress>
+                </div>
                 <div class="canvas-slot">
                   <div class="paper">
                     <canvas class="guide-canvas" width="1000" height="1000" aria-hidden="true">
@@ -84,29 +86,32 @@
                 <div class="board-actions">
                   <button class="button undo" data-action="undo">復原</button>
                   <button class="button clear" data-action="clear">清除</button>
-                  <button class="button outline" data-action="download" aria-label="下載工整 SVG">SVG
-                    ↓</button>
+                  <button class="button primary" data-action="upload" aria-label="上傳工整到 GitHub">上傳 GitHub</button>
                 </div>
                 <a class="board-link" target="_blank" rel="noopener noreferrer" hidden>查看工整 SVG
                   ↗</a>
               </section>
-              <section class="board" data-board="rough" aria-labelledby="rough-title">
+              <section class="board" data-board="rough" data-locked aria-labelledby="rough-title">
                 <div class="board-heading">
                   <h2 id="rough-title">潦草</h2><span>方正瘦金書 GBK</span>
+                </div>
+                <div class="board-progress">
+                  <span class="board-count"></span>
+                  <progress value="0" max="1" aria-label="潦草上傳進度"></progress>
                 </div>
                 <div class="canvas-slot">
                   <div class="paper">
                     <canvas class="guide-canvas" width="1000" height="1000" aria-hidden="true">
                     </canvas>
-                    <canvas class="writing-canvas" width="1000" height="1000" aria-label="潦草手寫畫布">
+                    <canvas class="writing-canvas" width="1000" height="1000" aria-label="潦草手寫畫布" aria-disabled="true">
                     </canvas>
+                    <div class="board-lock" role="status">請先上傳工整版</div>
                   </div>
                 </div>
                 <div class="board-actions">
                   <button class="button undo" data-action="undo">復原</button>
                   <button class="button clear" data-action="clear">清除</button>
-                  <button class="button outline" data-action="download" aria-label="下載潦草 SVG">SVG
-                    ↓</button>
+                  <button class="button primary" data-action="upload" aria-label="上傳潦草到 GitHub">上傳 GitHub</button>
                 </div>
                 <a class="board-link" target="_blank" rel="noopener noreferrer" hidden>查看潦草 SVG
                   ↗</a>
@@ -124,11 +129,7 @@
             </div>
             <div class="pair-actions">
               <button id="prev" class="button outline" aria-label="上一字">←</button>
-              <button id="upload" class="button primary">上傳
-                GitHub</button>
               <button id="next" class="button secondary">下一字 →</button>
-            </div>
-            <div class="upload-meta"><span id="draft-state"></span>
             </div>
           </div>
         </section>

@@ -22,6 +22,13 @@
       paper: element.querySelector('.paper'),
       buttons: Array.from(element.querySelectorAll('[data-action]')),
       link: element.querySelector('.board-link'),
+      element,
+      progress: element.querySelector('progress'),
+      count: element.querySelector('.board-count'),
+      lockMessage: element.querySelector('.board-lock'),
+      locked: side === 'rough',
+      completedCount: 0,
+      countedAsComplete: false,
       pointer: null,
       pointerType: '',
       strokeRect: null,
@@ -41,9 +48,7 @@
   let characterListPaper = null;
   let characterListStart = -1;
   let characterListIndex = -1;
-  let completedCount = 0;
   let countedIndex = -1;
-  let countedAsComplete = false;
   let shoujinFontLoaded = false;
   let githubSettings = {
     configured: false,
@@ -72,7 +77,7 @@
   }
 
   function recognizePen(event) {
-    if (event.pointerType !== 'pen' || penDetected) {
+    if (!['pen', 'stylus'].includes(event.pointerType) || penDetected) {
       return;
     }
     penDetected = true;
@@ -226,22 +231,30 @@
     return button;
   }
 
+  function setRoughLocked(locked) {
+    const rough = boards[1];
+    rough.locked = locked;
+    rough.element.toggleAttribute('data-locked', locked);
+    rough.canvas.setAttribute('aria-disabled', String(locked));
+    rough.lockMessage.hidden = !locked;
+    if (locked) {
+      for (const button of rough.buttons) {
+        button.disabled = true;
+      }
+    }
+  }
+
   function refreshCompletedCount() {
-    completedCount = inkTrace.count(activePaper, getUploadDestination());
+    const destination = getUploadDestination();
+    for (const board of boards) {
+      board.completedCount = activePaper.chars.reduce((count, _, index) =>
+        count + Number(inkTrace.done(activePaper, index, destination, board.side)), 0);
+      board.countedAsComplete = inkTrace.done(activePaper, characterIndex, destination, board.side);
+    }
     countedIndex = characterIndex;
-    countedAsComplete = inkTrace.pairDone(activePaper, characterIndex, getUploadDestination());
   }
 
   function updateEditorControls() {
-    const complete = inkTrace.pairDone(activePaper, characterIndex, getUploadDestination());
-    if (countedIndex === characterIndex) {
-      completedCount += Number(complete) - Number(countedAsComplete);
-    }
-    countedIndex = characterIndex;
-    countedAsComplete = complete;
-    getElement('counter').textContent = `${completedCount} / ${activePaper.chars.length} 已完成`;
-    getElement('completion').value = completedCount;
-
     const row = getElement('characters');
     const start = Math.floor(characterIndex / 8) * 8;
     if (characterListPaper !== activePaper || characterListStart !== start) {
@@ -261,39 +274,43 @@
       row.scrollLeft = Math.max(0, selected.offsetLeft - (row.clientWidth - selected.offsetWidth) / 2);
     }
 
-    let uploaded = 0;
-    let pendingUpload = false;
+    const destination = getUploadDestination();
+    setRoughLocked(
+      boards[0].pointer !== null ||
+      !inkTrace.done(activePaper, characterIndex, destination, 'regular')
+    );
     for (const board of boards) {
-      const boardComplete = inkTrace.done(activePaper, characterIndex, getUploadDestination(), board.side);
-      if (boardComplete) {
-        uploaded++;
+      const complete = inkTrace.done(activePaper, characterIndex, destination, board.side);
+      if (countedIndex === characterIndex) {
+        board.completedCount += Number(complete) - Number(board.countedAsComplete);
       }
+      board.countedAsComplete = complete;
+      board.progress.max = activePaper.chars.length;
+      board.progress.value = board.completedCount;
+      board.count.textContent = `${board.completedCount} / ${activePaper.chars.length} 已上傳`;
+
       const hasStrokes = getBoardStrokes(board).length > 0;
-      pendingUpload ||= hasStrokes && !boardComplete;
       for (const button of board.buttons) {
-        button.disabled = isUploading || !hasStrokes;
+        const alreadyUploaded = button.dataset.action === 'upload' && complete;
+        button.disabled = isUploading || board.locked || !hasStrokes || alreadyUploaded;
       }
-      board.link.hidden = !boardComplete;
-      if (boardComplete) {
+      board.link.hidden = !complete || board.locked;
+      if (!board.link.hidden) {
         board.link.href = getCurrentDraft()[board.fields.upload].url;
       }
     }
+    countedIndex = characterIndex;
     getElement('prev').disabled = isUploading || characterIndex === 0;
     getElement('next').disabled = isUploading || characterIndex === activePaper.chars.length - 1;
     for (const id of ['back', 'view-progress', 'settings', 'add-paper']) {
       getElement(id).disabled = isUploading;
     }
-    getElement('upload').disabled = isUploading || !pendingUpload;
-    getElement('draft-state').textContent = uploaded
-      ? `${uploaded} / 2 份筆跡已上傳`
-      : hasInk(getCurrentDraft()) ? '草稿 · 尚未上傳' : '';
   }
 
   function renderEditor() {
     if (!activePaper) {
       return;
     }
-    getElement('completion').max = activePaper.chars.length;
     getElement('paper-name').textContent = activePaper.title;
     getElement('target').textContent = activePaper.chars[characterIndex];
     getElement('position').textContent = `第 ${characterIndex + 1} / ${activePaper.chars.length} 字`;
@@ -413,7 +430,9 @@
     const previous = board.line?.at(-1);
     const width = release && previous ? previous.width : inkTrace.width(
       Number(getElement('width').value),
-      event.pointerType === 'pen' ? event.pressure : 1,
+      ['pen', 'stylus'].includes(event.pointerType)
+        ? (Number.isFinite(event.pressure) ? event.pressure : 0.5)
+        : 1,
       Number(getElement('pressure').value) / 100,
     );
     const margin = width / 2;
@@ -430,7 +449,7 @@
     board.pointer = null;
     board.pointerType = '';
     board.strokeRect = null;
-    if (board.canvas.hasPointerCapture(pointer)) {
+    if (typeof pointer === 'number' && board.canvas.hasPointerCapture(pointer)) {
       board.canvas.releasePointerCapture(pointer);
     }
   }
@@ -468,22 +487,71 @@
     }
   }
 
-  function download(board) {
-    const filename = inkTrace.name(activePaper.chars[characterIndex]).replace(/\.svg$/, board.side === 'regular' ? '-工整.svg' : '-潦草.svg');
-    const url = URL.createObjectURL(new Blob([inkTrace.svg(getBoardStrokes(board))], { type: 'image/svg+xml;charset=utf-8' }));
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.append(link);
-    link.click();
-    link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  function startStroke(board, event) {
+    if (!activePaper || isUploading || board.locked || board.pointer !== null) {
+      return false;
+    }
+    const lines = getBoardStrokes(board);
+    board.points = lines.reduce((count, line) => count + line.length, 0);
+    if (lines.length >= 1000 || board.points >= 20000) {
+      showMessage('筆跡達上限，請復原或清除部分筆畫。', true);
+      return false;
+    }
+
+    showMessage('');
+    const rect = board.canvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) {
+      return false;
+    }
+    board.strokeRect = rect;
+    board.pointer = event.pointerId;
+    board.pointerType = event.pointerType;
+    board.drawnPoints = 0;
+    board.line = [readPointerPoint(board, event)];
+    board.points++;
+    lines.push(board.line);
+    if (board.side === 'regular') {
+      setRoughLocked(true);
+      finishStroke(boards[1]);
+    }
+    drawPendingSamples(board);
+    return true;
+  }
+
+  function appendStrokeSample(board, sample, release = false) {
+    if (board.points >= 20000) {
+      return;
+    }
+    const next = readPointerPoint(board, sample, release);
+    const last = board.line.at(-1);
+    if (Math.hypot(next.x - last.x, next.y - last.y) >= MIN_SAMPLE_DISTANCE) {
+      board.line.push(next);
+      board.points++;
+    }
+  }
+
+  function capturePointer(board, pointerId) {
+    try {
+      board.canvas.setPointerCapture(pointerId);
+    } catch {
+      // Window listeners also receive movements without capture.
+    }
+  }
+
+  function stylusSample(touch) {
+    return {
+      pointerId: `stylus:${touch.identifier}`,
+      pointerType: 'stylus',
+      clientX: touch.clientX,
+      clientY: touch.clientY,
+      pressure: touch.force,
+    };
   }
 
   for (const board of boards) {
     const { canvas } = board;
     canvas.addEventListener('pointerdown', event => {
-      if (!activePaper || isUploading) {
+      if (!activePaper || isUploading || board.locked) {
         return;
       }
       if (event.cancelable) {
@@ -492,7 +560,8 @@
       recognizePen(event);
       if (
         (event.button !== 0 && !(event.pointerType === 'pen' && event.button === -1)) ||
-        (event.pointerType === 'touch' && penDetected && !allowFinger)
+        (event.pointerType === 'touch' && penDetected && !allowFinger) ||
+        board.pointerType === 'stylus'
       ) {
         return;
       }
@@ -503,89 +572,131 @@
           }
         }
       }
-      if (board.pointer !== null) {
-        return;
+      if (startStroke(board, event)) {
+        capturePointer(board, event.pointerId);
       }
-
-      const lines = getBoardStrokes(board);
-      board.points = lines.reduce((count, line) => count + line.length, 0);
-      if (lines.length >= 1000 || board.points >= 20000) {
-        showMessage('筆跡達上限，請復原或清除部分筆畫。', true);
-        return;
-      }
-
-      board.strokeRect = canvas.getBoundingClientRect();
-      board.pointer = event.pointerId;
-      board.pointerType = event.pointerType;
-      board.drawnPoints = 0;
-      board.line = [readPointerPoint(board, event)];
-      board.points++;
-      lines.push(board.line);
-      try {
-        canvas.setPointerCapture(event.pointerId);
-      } catch {
-        // Window listeners can finish the stroke if capture is unavailable.
-      }
-      drawPendingSamples(board);
-      showMessage('');
     });
 
     window.addEventListener('pointermove', event => {
+      // Recover contact when the browser first delivers a pressed move.
+      if (
+        event.pointerType === 'pen' && ((event.buttons & 1) || event.pressure > 0) &&
+        event.target === canvas
+      ) {
+        recognizePen(event);
+        if (boards.every(otherBoard => otherBoard.pointer === null)) {
+          const samples = event.getCoalescedEvents?.();
+          if (startStroke(board, samples?.[0] || event)) {
+            capturePointer(board, event.pointerId);
+          }
+        }
+      }
       if (event.pointerId !== board.pointer) {
         return;
       }
       if (event.cancelable) {
         event.preventDefault();
       }
+      if (event.pointerType === 'pen' && event.buttons === 0 && !event.pressure) {
+        finishStroke(board);
+        return;
+      }
       const samples = event.getCoalescedEvents?.();
       for (const sample of samples?.length ? samples : [event]) {
-        const next = readPointerPoint(board, sample);
-        const last = board.line.at(-1);
-        if (Math.hypot(next.x - last.x, next.y - last.y) < MIN_SAMPLE_DISTANCE) {
-          continue;
-        }
-        if (board.points >= 20000) {
-          finishStroke(board);
-          showMessage('筆跡達上限，請減少筆畫。', true);
-          return;
-        }
-        board.line.push(next);
-        board.points++;
+        appendStrokeSample(board, sample);
       }
       scheduleSamples(board);
     }, { passive: false });
 
     window.addEventListener('pointerup', event => {
-      if (event.pointerId !== board.pointer) {
-        return;
+      if (event.pointerId === board.pointer) {
+        appendStrokeSample(board, event, true);
+        finishStroke(board);
       }
-      const next = readPointerPoint(board, event, true);
-      const last = board.line.at(-1);
-      if (board.points < 20000 && Math.hypot(next.x - last.x, next.y - last.y) > 0.2) {
-        board.line.push(next);
-      }
-      finishStroke(board);
     });
 
-    for (const type of ['pointercancel', 'lostpointercapture']) {
+    window.addEventListener('pointercancel', event => {
+      if (event.pointerId === board.pointer) {
+        finishStroke(board);
+      }
+    });
+    window.addEventListener('lostpointercapture', event => {
+      if (event.pointerId === board.pointer && board.pointerType !== 'pen') {
+        finishStroke(board);
+      }
+    });
+
+    // WebKit can expose Pencil samples through Touch Events even when
+    // the matching pen Pointer Event is interrupted or missing.
+    canvas.addEventListener('touchstart', event => {
+      if (!activePaper || board.locked || isUploading) {
+        return;
+      }
+      const touch = Array.from(event.changedTouches).find(item => item.touchType === 'stylus');
+      if (!touch) {
+        if (penDetected && !allowFinger && event.cancelable) {
+          event.preventDefault();
+        }
+        return;
+      }
+      if (event.cancelable) {
+        event.preventDefault();
+      }
+      const sample = stylusSample(touch);
+      recognizePen(sample);
+      if (board.pointerType === 'pen') {
+        // Adopt the pointer stroke instead of drawing the same contact twice.
+        const pointerId = board.pointer;
+        board.pointer = sample.pointerId;
+        board.pointerType = 'stylus';
+        if (canvas.hasPointerCapture(pointerId)) {
+          canvas.releasePointerCapture(pointerId);
+        }
+        appendStrokeSample(board, sample);
+        scheduleSamples(board);
+      } else {
+        startStroke(board, sample);
+      }
+    }, { passive: false });
+
+    for (const type of ['touchmove', 'touchend', 'touchcancel']) {
       window.addEventListener(type, event => {
-        if (event.pointerId === board.pointer) {
+        if (board.pointerType !== 'stylus') {
+          return;
+        }
+        const touch = Array.from(event.changedTouches).find(item =>
+          `stylus:${item.identifier}` === board.pointer
+        );
+        if (!touch) {
+          return;
+        }
+        if (event.cancelable) {
+          event.preventDefault();
+        }
+        if (type !== 'touchcancel') {
+          appendStrokeSample(board, stylusSample(touch), type === 'touchend');
+        }
+        if (type === 'touchmove') {
+          scheduleSamples(board);
+        } else {
           finishStroke(board);
         }
-      });
+      }, { passive: false });
     }
 
     for (const button of board.buttons) {
       button.onclick = () => {
-        finishAllStrokes();
-        const action = button.dataset.action;
-        if (action === 'download') {
-          return download(board);
+        if (!activePaper || isUploading || board.locked) {
+          return;
         }
+        const action = button.dataset.action;
+        if (action === 'upload') {
+          return uploadBoard(board);
+        }
+        finishAllStrokes();
         if (action === 'undo') {
           getBoardStrokes(board).pop();
-        }
-        else {
+        } else {
           getCurrentDraft()[board.fields.strokes] = [];
         }
         saveCurrentDraft();
@@ -654,7 +765,7 @@
         handledPenUp = -Infinity;
         return;
       }
-      activate.call(button, event);
+      return activate.call(button, event);
     };
   }
 
@@ -662,7 +773,7 @@
     enablePenTap(getElement(id));
   }
   for (const board of boards) {
-    for (const button of board.buttons.filter(button => button.dataset.action !== 'download')) {
+    for (const button of board.buttons) {
       enablePenTap(button);
     }
   }
@@ -674,55 +785,53 @@
     }
     getElement('progress-dialog').showModal();
   };
-  getElement('upload').onclick = async () => {
-    if (isUploading || !activePaper) {
+  async function uploadBoard(board) {
+    if (isUploading || !activePaper || board.locked) {
       return;
     }
     finishAllStrokes();
+    const ink = getBoardStrokes(board);
+    const destination = getUploadDestination();
+    if (board.locked || !ink.length || inkTrace.done(activePaper, characterIndex, destination, board.side)) {
+      return;
+    }
     if (!githubSettings.configured) {
       showSettings();
       showSettingsMessage('請先儲存 GitHub 設定。');
       return;
     }
-    const pending = boards.filter(board =>
-      getBoardStrokes(board).length &&
-      !inkTrace.done(activePaper, characterIndex, getUploadDestination(), board.side)
-    );
-    if (!pending.length) {
-      return;
-    }
+
     isUploading = true;
-    renderEditor();
+    updateEditorControls();
+    const label = board.side === 'regular' ? '工整' : '潦草';
+    showMessage(`上傳${label}筆跡中…`);
     try {
       await InkTraceGitHub.check(githubSettings);
-      for (const board of pending) {
-        const ink = getBoardStrokes(board);
-        showMessage(board.side === 'regular' ? '上傳工整筆跡中…' : '上傳潦草筆跡中…');
-        const result = await InkTraceGitHub.upload(
-          githubSettings,
-          activePaper.title,
-          activePaper.chars[characterIndex],
-          board.side,
-          inkTrace.svg(ink),
-        );
-        getCurrentDraft()[board.fields.upload] = {
-          ...result,
-          svgFormat: inkTrace.svgFormat,
-          signature: inkTrace.signature(ink),
-          title: activePaper.title,
-          destination: getUploadDestination(),
-          at: Date.now(),
-        };
-        await saveCurrentDraft();
-      }
-      showMessage('已上傳。');
+      const result = await InkTraceGitHub.upload(
+        githubSettings,
+        activePaper.title,
+        activePaper.chars[characterIndex],
+        board.side,
+        inkTrace.svg(ink),
+      );
+      getCurrentDraft()[board.fields.upload] = {
+        ...result,
+        svgFormat: inkTrace.svgFormat,
+        signature: inkTrace.signature(ink),
+        title: activePaper.title,
+        destination,
+        at: Date.now(),
+      };
+      await saveCurrentDraft();
+      showMessage(board.side === 'regular' ? '工整已上傳，可以書寫潦草版。' : '潦草已上傳。');
     } catch (error) {
       showMessage(error.message, true);
     } finally {
       isUploading = false;
-      renderEditor();
+      updateEditorControls();
+      fitCanvas();
     }
-  };
+  }
 
   function showPaperDialog(p = null) {
     editingPaperId = p?.id || null;
