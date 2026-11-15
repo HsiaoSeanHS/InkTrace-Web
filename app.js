@@ -3,7 +3,7 @@
 
   const getElement = id => document.getElementById(id);
   const inkTrace = InkTrace;
-  const MAX_BOARD_SIZE = 300;
+  const CANVAS_SIZE_KEY = 'inktrace-web-canvas-size';
   const MIN_SAMPLE_DISTANCE = 0.4;
   const SHOUJIN_GUIDE_FONT = '400 100px InkTraceShoujin';
 
@@ -291,7 +291,6 @@
       return;
     }
     getElement('paper-title').textContent = activePaper.title;
-    getElement('target').textContent = activePaper.chars[characterIndex];
     getElement('position').textContent = `第 ${characterIndex + 1} / ${activePaper.chars.length} 字`;
     updateEditorControls();
     for (const board of boards) {
@@ -1005,6 +1004,28 @@
     getElement('token').value = '';
   });
   let canvasFitFrame = 0;
+  const canvasSizeInput = getElement('canvas-size');
+  const canvasSizeOutput = getElement('canvas-size-value');
+  const minCanvasSize = Number(canvasSizeInput.min);
+  const maxCanvasSize = Number(canvasSizeInput.max);
+  let preferredCanvasSize = canvasSizeInput.valueAsNumber;
+
+  try {
+    const savedSize = Number(localStorage.getItem(CANVAS_SIZE_KEY));
+    if (Number.isInteger(savedSize) && savedSize >= minCanvasSize && savedSize <= maxCanvasSize) {
+      preferredCanvasSize = savedSize;
+    }
+  } catch (_) { }
+
+  canvasSizeInput.oninput = () => {
+    preferredCanvasSize = canvasSizeInput.valueAsNumber;
+    fitCanvas();
+  };
+  canvasSizeInput.onchange = () => {
+    try {
+      localStorage.setItem(CANVAS_SIZE_KEY, String(preferredCanvasSize));
+    } catch (_) { }
+  };
 
   function fitCanvas() {
     cancelAnimationFrame(canvasFitFrame);
@@ -1012,10 +1033,21 @@
       if (!activePaper || isDrawing()) {
         return;
       }
-      const side = Math.max(0, Math.floor(Math.min(MAX_BOARD_SIZE, ...boards.flatMap(board => {
+      const availableSize = Math.floor(Math.min(maxCanvasSize, ...boards.flatMap(board => {
         const rect = board.slot.getBoundingClientRect();
         return [rect.width, rect.height];
-      }))));
+      })));
+      if (availableSize <= 0) {
+        return;
+      }
+      const minimum = Math.min(minCanvasSize, availableSize);
+      const side = Math.min(preferredCanvasSize, availableSize);
+      canvasSizeInput.min = String(minimum);
+      canvasSizeInput.max = String(availableSize);
+      canvasSizeInput.value = String(side);
+      canvasSizeInput.disabled = minimum === availableSize;
+      canvasSizeInput.setAttribute('aria-valuetext', `${side} 像素`);
+      canvasSizeOutput.value = `${side} px`;
       for (const board of boards) {
         board.paper.style.width = side + 'px';
         board.paper.style.height = side + 'px';

@@ -50,13 +50,11 @@
       <section id="editor" hidden aria-labelledby="paper-title">
         <section class="writing-card">
           <div class="section-head">
-            <h1 id="paper-title"></h1>
-          </div>
-          <div id="characters" class="characters" aria-label="選擇字元">
-          </div>
-          <div class="canvas-area">
-            <div class="canvas-head"><span>字元：<strong id="target">天</strong></span><span
-                id="position">第 1 / 8 字</span>
+            <div class="paper-heading">
+              <h1 id="paper-title"></h1>
+              <span id="position"></span>
+            </div>
+            <div class="writing-options">
               <label class="writing-switch">
                 <input id="show-guide" type="checkbox" role="switch" checked>
                 <span class="switch-track" aria-hidden="true"></span>
@@ -67,6 +65,15 @@
                 <span class="switch-track" aria-hidden="true"></span>
                 <span class="switch-label">僅用觸控筆書寫</span>
               </label>
+            </div>
+          </div>
+          <div id="characters" class="characters" aria-label="選擇字元">
+          </div>
+          <div class="canvas-area">
+            <div class="canvas-size">
+              <label for="canvas-size">字格大小</label>
+              <input id="canvas-size" type="range" min="96" max="480" value="300">
+              <output id="canvas-size-value" for="canvas-size" aria-hidden="true">300 px</output>
             </div>
             <div class="board-grid">
               <section class="board" data-board="regular" aria-labelledby="regular-title">
@@ -88,8 +95,8 @@
                 <div class="board-actions">
                   <button class="button undo" data-action="undo">復原</button>
                   <button class="button clear" data-action="clear">清除</button>
-                  <button class="button secondary" data-action="upload" aria-label="上傳工整到 GitHub">上傳</button>
-                  <button class="button outline" data-action="download" aria-label="下載工整 SVG">下載</button>
+                  <button class="button secondary" data-action="upload" aria-label="上傳工整到 GitHub">上傳 GitHub</button>
+                  <button class="button outline" data-action="download" aria-label="下載工整 SVG">下載 SVG</button>
                 </div>
               </section>
               <section class="board" data-board="rough" data-locked aria-labelledby="rough-title">
@@ -112,8 +119,8 @@
                 <div class="board-actions">
                   <button class="button undo" data-action="undo">復原</button>
                   <button class="button clear" data-action="clear">清除</button>
-                  <button class="button secondary" data-action="upload" aria-label="上傳潦草到 GitHub">上傳</button>
-                  <button class="button outline" data-action="download" aria-label="下載潦草 SVG">下載</button>
+                  <button class="button secondary" data-action="upload" aria-label="上傳潦草到 GitHub">上傳 GitHub</button>
+                  <button class="button outline" data-action="download" aria-label="下載潦草 SVG">下載 SVG</button>
                 </div>
               </section>
             </div>
@@ -200,6 +207,7 @@
         <h2>書寫進度</h2>
         <button type="button" class="close" data-close="progress-dialog" aria-label="關閉">×</button>
       </div>
+      <p class="hint">藍框：目前字元 · 黃色：已上傳一種 · 綠色：兩種都已上傳 · 圓點：有草稿</p>
       <div id="progress-grid" class="progress-grid">
       </div>
     </dialog>

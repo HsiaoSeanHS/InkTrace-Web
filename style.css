@@ -454,19 +454,6 @@ progress::-moz-progress-bar {
   margin: auto;
 }
 
-.canvas-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 13px;
-  color: var(--muted);
-  margin-bottom: 15px;
-}
-
-.canvas-head strong {
-  color: var(--blue);
-}
-
 .paper {
   position: relative;
   aspect-ratio: 1;
@@ -830,10 +817,6 @@ details p {
     margin: 22px 0 18px;
   }
 
-  .canvas-head {
-    font-size: 11px;
-  }
-
   .paper {
     border-radius: 13px;
   }
@@ -964,6 +947,36 @@ body.writing-mode {
   overflow-wrap: anywhere;
 }
 
+.writing-mode .section-head {
+  flex-wrap: wrap;
+  gap: 2px 12px;
+}
+
+.paper-heading,
+.writing-options {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.paper-heading #position {
+  white-space: nowrap;
+}
+
+.paper-heading #position,
+.writing-options,
+.canvas-size {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.writing-options {
+  flex-wrap: wrap;
+  gap: 0 12px;
+  margin-inline-start: auto;
+}
+
 .writing-mode .counter {
   font-size: 12px;
   white-space: nowrap;
@@ -1007,14 +1020,28 @@ body.writing-mode {
   gap: 4px;
 }
 
-.writing-mode .canvas-head {
-  width: 100%;
-  max-width: 360px;
-  justify-self: center;
+.canvas-size {
+  width: min(100%, 320px);
+  display: flex;
   align-items: center;
-  font-size: 11px;
-  gap: 8px;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+.canvas-size input {
+  flex: 1;
+  width: 0;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
   margin: 0;
+  touch-action: pan-y;
+}
+
+.canvas-size output {
+  min-width: 6ch;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
 }
 
 .writing-switch {
@@ -1095,7 +1122,6 @@ body.writing-mode {
 
 .writing-mode .paper {
   width: 100%;
-  max-width: 360px;
   max-height: 100%;
   flex: none;
   border-radius: 14px;
@@ -1299,10 +1325,6 @@ body.writing-mode {
     padding: 8px 12px;
   }
 
-  .writing-mode .canvas-head {
-    font-size: 11px;
-  }
-
   .editor-controls {
     gap: 6px;
   }
@@ -1465,10 +1487,6 @@ body.writing-mode {
   grid-template-rows: 32px minmax(0, 1fr);
 }
 
-.writing-mode .canvas-head {
-  max-width: none;
-}
-
 .board-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1577,10 +1595,6 @@ body.writing-mode {
     grid-template-rows: auto auto minmax(200px, 1fr);
   }
 
-  .writing-mode .canvas-area {
-    grid-template-rows: 26px minmax(0, 1fr);
-  }
-
   .writing-mode .editor-controls {
     grid-column: 2;
     grid-row: 3;
@@ -1609,10 +1623,6 @@ body.writing-mode {
   touch-action: manipulation;
 }
 
-.writing-mode .paper {
-  max-width: 300px;
-}
-
 .board-grid {
   gap: clamp(14px, 3vw, 32px);
 }
@@ -1637,11 +1647,7 @@ body.writing-mode {
     padding-inline: 7px;
   }
 
-  .writing-mode .canvas-head {
-    gap: 4px;
-  }
-
-  .canvas-head .writing-switch {
+  .writing-options .writing-switch {
     gap: 3px;
   }
 
