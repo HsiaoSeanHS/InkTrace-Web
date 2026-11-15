@@ -57,11 +57,16 @@
           <div class="canvas-area">
             <div class="canvas-head"><span>字元：<strong id="target">天</strong></span><span
                 id="position">第 1 / 8 字</span>
-              <label class="guide-toggle">
-                <input id="show-guide" type="checkbox" checked> 提示</label>
-              <label class="guide-toggle">
-                <input id="pen-input" type="checkbox"> 防誤觸</label>
-              <span id="input-status" class="visually-hidden" role="status"></span>
+              <label class="writing-switch">
+                <input id="show-guide" type="checkbox" role="switch" checked>
+                <span class="switch-track" aria-hidden="true"></span>
+                <span class="switch-label">提示</span>
+              </label>
+              <label class="writing-switch">
+                <input id="pen-input" type="checkbox" role="switch">
+                <span class="switch-track" aria-hidden="true"></span>
+                <span class="switch-label">僅用觸控筆書寫</span>
+              </label>
             </div>
             <div class="board-grid">
               <section class="board" data-board="regular" aria-labelledby="regular-title">
@@ -83,7 +88,8 @@
                 <div class="board-actions">
                   <button class="button undo" data-action="undo">復原</button>
                   <button class="button clear" data-action="clear">清除</button>
-                  <button class="button primary" data-action="upload" aria-label="上傳工整到 GitHub">上傳 GitHub</button>
+                  <button class="button secondary" data-action="upload" aria-label="上傳工整到 GitHub">上傳 GitHub</button>
+                  <button class="button outline" data-action="download" aria-label="下載工整 SVG">下載 SVG</button>
                 </div>
               </section>
               <section class="board" data-board="rough" data-locked aria-labelledby="rough-title">
@@ -106,7 +112,8 @@
                 <div class="board-actions">
                   <button class="button undo" data-action="undo">復原</button>
                   <button class="button clear" data-action="clear">清除</button>
-                  <button class="button primary" data-action="upload" aria-label="上傳潦草到 GitHub">上傳 GitHub</button>
+                  <button class="button secondary" data-action="upload" aria-label="上傳潦草到 GitHub">上傳 GitHub</button>
+                  <button class="button outline" data-action="download" aria-label="下載潦草 SVG">下載 SVG</button>
                 </div>
               </section>
             </div>

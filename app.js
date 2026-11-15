@@ -41,8 +41,6 @@
   let characterIndex = 0;
   let uploadingBoard = null;
   let editingPaperId = null;
-  let penDetected = false;
-  let allowFinger = false;
   let characterListPaper = null;
   let characterListStart = -1;
   let characterListIndex = -1;
@@ -65,37 +63,12 @@
   const isDrawing = () => boards.some(board => board.pointer !== null);
   const editor = getElement('editor');
   const penInput = getElement('pen-input');
-  const inputStatus = getElement('input-status');
-
-  function updateInputMode() {
-    const penOnly = penDetected && !allowFinger;
-    penInput.checked = penOnly;
-    inputStatus.textContent = penOnly ? '防誤觸已開啟' : '';
-  }
-
-  function recognizePen(event) {
-    if (!['pen', 'stylus'].includes(event.pointerType) || penDetected) {
-      return;
-    }
-    penDetected = true;
-    updateInputMode();
-    if (!allowFinger) {
-      for (const board of boards) {
-        if (board.pointerType === 'touch') {
-          discardPalmStroke(board);
-        }
-      }
-    }
-  }
 
   penInput.onchange = () => {
-    penDetected ||= penInput.checked;
-    allowFinger = !penInput.checked;
-    updateInputMode();
     if (penInput.checked) {
       for (const board of boards) {
-        if (board.pointerType === 'touch') {
-          discardPalmStroke(board);
+        if (board.pointer !== null && !['pen', 'stylus'].includes(board.pointerType)) {
+          discardActiveStroke(board);
         }
       }
     }
@@ -462,7 +435,7 @@
     }
   }
 
-  function discardPalmStroke(board) {
+  function discardActiveStroke(board) {
     if (board.frame) {
       cancelAnimationFrame(board.frame);
       board.frame = 0;
@@ -566,10 +539,9 @@
       if (event.cancelable) {
         event.preventDefault();
       }
-      recognizePen(event);
       if (
         (event.button !== 0 && !(event.pointerType === 'pen' && event.button === -1)) ||
-        (event.pointerType === 'touch' && penDetected && !allowFinger) ||
+        (penInput.checked && event.pointerType !== 'pen') ||
         board.pointerType === 'stylus'
       ) {
         return;
@@ -592,7 +564,6 @@
         event.pointerType === 'pen' && ((event.buttons & 1) || event.pressure > 0) &&
         event.target === canvas
       ) {
-        recognizePen(event);
         if (boards.every(otherBoard => otherBoard.pointer === null)) {
           const samples = event.getCoalescedEvents?.();
           if (startStroke(board, samples?.[0] || event)) {
@@ -643,7 +614,7 @@
       }
       const touch = Array.from(event.changedTouches).find(item => item.touchType === 'stylus');
       if (!touch) {
-        if (penDetected && !allowFinger && event.cancelable) {
+        if (penInput.checked && event.cancelable) {
           event.preventDefault();
         }
         return;
@@ -652,7 +623,10 @@
         event.preventDefault();
       }
       const sample = stylusSample(touch);
-      recognizePen(sample);
+      if (board.pointerType === 'touch') {
+        // The browser may have reported this Pencil contact as touch first.
+        discardActiveStroke(board);
+      }
       if (board.pointerType === 'pen') {
         // Adopt the pointer stroke instead of drawing the same contact twice.
         const pointerId = board.pointer;
@@ -703,6 +677,10 @@
           return uploadBoard(board);
         }
         finishAllStrokes();
+        if (action === 'download') {
+          downloadBoard(board);
+          return;
+        }
         board.uploadError = '';
         if (action === 'undo') {
           getBoardStrokes(board).pop();
@@ -801,6 +779,24 @@
     }
     getElement('progress-dialog').showModal();
   };
+
+  function downloadBoard(board) {
+    const strokes = getBoardStrokes(board);
+    if (!strokes.length) {
+      return;
+    }
+    const svg = new Blob([inkTrace.svg(strokes)], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(svg);
+    const link = document.createElement('a');
+    const style = board.side === 'regular' ? '工整' : '潦草';
+    link.href = url;
+    link.download = `${style}-${inkTrace.name(activePaper.chars[characterIndex])}`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  }
+
   async function uploadBoard(board) {
     if (uploadingBoard || !activePaper || board.locked) {
       return;
@@ -1040,8 +1036,6 @@
     }
   });
 
-  editor.addEventListener('pointerover', recognizePen, true);
-  editor.addEventListener('pointerdown', recognizePen, true);
   for (const type of ['selectstart', 'contextmenu', 'dragstart']) {
     editor.addEventListener(type, event => event.preventDefault());
   }

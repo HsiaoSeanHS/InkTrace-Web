@@ -12,6 +12,8 @@
   --surface: #fff;
   --ink: #212121;
   --muted: #757575;
+  --switch-label-on: #505050;
+  --switch-label-off: #767676;
   --line: #e5e5e8;
   --blue: #1976d2;
   --blue-bg: #e3f2fd;
@@ -34,6 +36,8 @@
   --surface: #1e1e1e;
   --ink: #e0e0e0;
   --muted: #aaa;
+  --switch-label-on: #d0d0d0;
+  --switch-label-off: #888;
   --line: #363636;
   --blue: #64b5f6;
   --blue-bg: #00325a;
@@ -53,6 +57,8 @@
     --surface: #1e1e1e;
     --ink: #e0e0e0;
     --muted: #aaa;
+    --switch-label-on: #d0d0d0;
+    --switch-label-off: #888;
     --line: #363636;
     --blue: #64b5f6;
     --blue-bg: #00325a;
@@ -1011,13 +1017,72 @@ body.writing-mode {
   margin: 0;
 }
 
-.guide-toggle {
+.writing-switch {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 5px;
   min-height: 36px;
   cursor: pointer;
   white-space: nowrap;
+}
+
+.writing-switch input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.switch-track {
+  position: relative;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 16px;
+  border: 1px solid var(--muted);
+  border-radius: 999px;
+  background: var(--surface);
+  pointer-events: none;
+}
+
+.switch-track::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  inset-inline-start: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.writing-switch input:checked + .switch-track {
+  border-color: var(--blue);
+  background: var(--blue);
+}
+
+.writing-switch input:checked + .switch-track::before {
+  inset-inline-start: auto;
+  inset-inline-end: 2px;
+  background: var(--on-blue);
+}
+
+.switch-label {
+  color: var(--switch-label-off);
+}
+
+.writing-switch input:checked ~ .switch-label {
+  color: var(--switch-label-on);
+}
+
+.writing-switch input:focus-visible + .switch-track {
+  outline: 3px solid #c99751;
+  outline-offset: 3px;
 }
 
 .writing-mode .canvas-slot {
@@ -1302,7 +1367,7 @@ body.writing-mode {
     gap: 0;
   }
 
-  .writing-mode .guide-toggle {
+  .writing-mode .writing-switch {
     min-height: 30px;
   }
 
@@ -1452,7 +1517,7 @@ body.writing-mode {
 
 .board-actions {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 5px;
 }
 
@@ -1540,17 +1605,8 @@ body.writing-mode {
 }
 
 #editor button,
-#editor .guide-toggle {
+#editor .writing-switch {
   touch-action: manipulation;
-}
-
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
 }
 
 .writing-mode .paper {
@@ -1585,12 +1641,12 @@ body.writing-mode {
     gap: 4px;
   }
 
-  .canvas-head .guide-toggle {
-    gap: 2px;
+  .canvas-head .writing-switch {
+    gap: 3px;
   }
 
-  .canvas-head input[type="checkbox"] {
-    margin: 0;
+  .switch-track {
+    width: 24px;
   }
 }
 
@@ -1667,15 +1723,13 @@ body.writing-mode {
   cursor: default;
 }
 
-@media (max-width: 420px) {
+@media (max-width: 699px), (orientation: landscape) and (max-height: 520px) and (max-width: 1000px) {
   .board-actions {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
 
-  .board-actions [data-action="upload"] {
-    grid-column: 1 / -1;
-  }
-
+@media (max-width: 420px) {
   .board-lock {
     font-size: 11px;
   }
