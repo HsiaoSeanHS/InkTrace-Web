@@ -21,14 +21,12 @@
       slot: element.querySelector('.canvas-slot'),
       paper: element.querySelector('.paper'),
       buttons: Array.from(element.querySelectorAll('[data-action]')),
-      link: element.querySelector('.board-link'),
       element,
       progress: element.querySelector('progress'),
-      count: element.querySelector('.board-count'),
+      status: element.querySelector('.board-status'),
+      uploadError: '',
       lockMessage: element.querySelector('.board-lock'),
       locked: side === 'rough',
-      completedCount: 0,
-      countedAsComplete: false,
       pointer: null,
       pointerType: '',
       strokeRect: null,
@@ -41,14 +39,13 @@
   let papers = [];
   let activePaper = null;
   let characterIndex = 0;
-  let isUploading = false;
+  let uploadingBoard = null;
   let editingPaperId = null;
   let penDetected = false;
   let allowFinger = false;
   let characterListPaper = null;
   let characterListStart = -1;
   let characterListIndex = -1;
-  let countedIndex = -1;
   let shoujinFontLoaded = false;
   let githubSettings = {
     configured: false,
@@ -124,7 +121,7 @@
     }
   }
 
-  async function saveCurrentDraft() {
+  async function saveCurrentDraft(onError = error => showMessage(error.message, true)) {
     const draft = activePaper?.drafts[characterIndex];
     if (!draft) {
       return;
@@ -132,7 +129,7 @@
     try {
       await PaperStore.putDraft(activePaper.id, characterIndex, draft);
     } catch (error) {
-      showMessage(error.message, true);
+      onError(error);
     }
   }
 
@@ -207,15 +204,22 @@
   }
 
   function updateCharacterButton(button, index) {
-    const done = inkTrace.pairDone(activePaper, index, getUploadDestination());
+    const destination = getUploadDestination();
+    const regularDone = inkTrace.done(activePaper, index, destination, 'regular');
+    const roughDone = inkTrace.done(activePaper, index, destination, 'rough');
+    const done = regularDone && roughDone;
+    const partial = regularDone !== roughDone;
     const hasDraft = hasInk(activePaper.drafts[index]);
     const selected = index === characterIndex;
     button.classList.toggle('selected', selected);
     button.classList.toggle('done', done);
-    button.classList.toggle('draft', hasDraft && !done);
-    button.disabled = isUploading;
+    button.classList.toggle('partial', partial);
+    button.classList.toggle('draft', hasDraft && !partial && !done);
+    button.disabled = Boolean(uploadingBoard);
     button.setAttribute('aria-pressed', String(selected));
-    const status = done ? '已上傳' : hasDraft ? '有草稿' : '未寫';
+    const status = done ? '兩種都已上傳' :
+      partial ? `僅${regularDone ? '工整' : '潦草'}已上傳` :
+      hasDraft ? '有草稿' : '未寫';
     button.setAttribute('aria-label', `${activePaper.chars[index]}，第 ${index + 1} 字，${status}`);
   }
 
@@ -244,17 +248,30 @@
     }
   }
 
-  function refreshCompletedCount() {
-    const destination = getUploadDestination();
+  function clearUploadErrors() {
     for (const board of boards) {
-      board.completedCount = activePaper.chars.reduce((count, _, index) =>
-        count + Number(inkTrace.done(activePaper, index, destination, board.side)), 0);
-      board.countedAsComplete = inkTrace.done(activePaper, characterIndex, destination, board.side);
+      board.uploadError = '';
     }
-    countedIndex = characterIndex;
+  }
+
+  function updateBoardProgress(board, complete) {
+    const uploading = uploadingBoard === board;
+    const label = uploading ? '上傳中' : complete ? '上傳完成' : '尚未上傳';
+    const status = board.uploadError ? `${label} · ${board.uploadError}` : label;
+    if (board.status.textContent !== status) {
+      board.status.textContent = status;
+    }
+    board.status.classList.toggle('error', !!board.uploadError);
+    board.progress.setAttribute('aria-valuetext', label);
+    if (uploading) {
+      board.progress.removeAttribute('value');
+    } else {
+      board.progress.value = complete ? 1 : 0;
+    }
   }
 
   function updateEditorControls() {
+    const isUploading = Boolean(uploadingBoard);
     const row = getElement('characters');
     const start = Math.floor(characterIndex / 8) * 8;
     if (characterListPaper !== activePaper || characterListStart !== start) {
@@ -281,28 +298,17 @@
     );
     for (const board of boards) {
       const complete = inkTrace.done(activePaper, characterIndex, destination, board.side);
-      if (countedIndex === characterIndex) {
-        board.completedCount += Number(complete) - Number(board.countedAsComplete);
-      }
-      board.countedAsComplete = complete;
-      board.progress.max = activePaper.chars.length;
-      board.progress.value = board.completedCount;
-      board.count.textContent = `${board.completedCount} / ${activePaper.chars.length} 已上傳`;
+      updateBoardProgress(board, complete);
 
       const hasStrokes = getBoardStrokes(board).length > 0;
       for (const button of board.buttons) {
         const alreadyUploaded = button.dataset.action === 'upload' && complete;
         button.disabled = isUploading || board.locked || !hasStrokes || alreadyUploaded;
       }
-      board.link.hidden = !complete || board.locked;
-      if (!board.link.hidden) {
-        board.link.href = getCurrentDraft()[board.fields.upload].url;
-      }
     }
-    countedIndex = characterIndex;
     getElement('prev').disabled = isUploading || characterIndex === 0;
     getElement('next').disabled = isUploading || characterIndex === activePaper.chars.length - 1;
-    for (const id of ['back', 'view-progress', 'settings', 'add-paper']) {
+    for (const id of ['view-progress', 'settings', 'add-paper']) {
       getElement(id).disabled = isUploading;
     }
   }
@@ -311,7 +317,7 @@
     if (!activePaper) {
       return;
     }
-    getElement('paper-name').textContent = activePaper.title;
+    getElement('paper-title').textContent = activePaper.title;
     getElement('target').textContent = activePaper.chars[characterIndex];
     getElement('position').textContent = `第 ${characterIndex + 1} / ${activePaper.chars.length} 字`;
     updateEditorControls();
@@ -400,10 +406,11 @@
   }
 
   function selectCharacter(nextIndex) {
-    if (isUploading || !activePaper || nextIndex < 0 || nextIndex >= activePaper.chars.length) {
+    if (uploadingBoard || !activePaper || nextIndex < 0 || nextIndex >= activePaper.chars.length) {
       return;
     }
     finishAllStrokes();
+    clearUploadErrors();
     characterIndex = nextIndex;
     activePaper.selected = characterIndex;
     drawGuides();
@@ -415,9 +422,10 @@
   function openPaper(id) {
     activePaper = papers.find(p => p.id === id);
     characterIndex = Math.min(activePaper.selected || 0, activePaper.chars.length - 1);
-    refreshCompletedCount();
+    clearUploadErrors();
     getElement('home').hidden = true;
     getElement('editor').hidden = false;
+    getElement('view-progress').hidden = false;
     document.body.classList.add('writing-mode');
     window.scrollTo(0, 0);
     showMessage('');
@@ -488,7 +496,7 @@
   }
 
   function startStroke(board, event) {
-    if (!activePaper || isUploading || board.locked || board.pointer !== null) {
+    if (!activePaper || uploadingBoard || board.locked || board.pointer !== null) {
       return false;
     }
     const lines = getBoardStrokes(board);
@@ -499,6 +507,7 @@
     }
 
     showMessage('');
+    board.uploadError = '';
     const rect = board.canvas.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) {
       return false;
@@ -551,7 +560,7 @@
   for (const board of boards) {
     const { canvas } = board;
     canvas.addEventListener('pointerdown', event => {
-      if (!activePaper || isUploading || board.locked) {
+      if (!activePaper || uploadingBoard || board.locked) {
         return;
       }
       if (event.cancelable) {
@@ -629,7 +638,7 @@
     // WebKit can expose Pencil samples through Touch Events even when
     // the matching pen Pointer Event is interrupted or missing.
     canvas.addEventListener('touchstart', event => {
-      if (!activePaper || board.locked || isUploading) {
+      if (!activePaper || board.locked || uploadingBoard) {
         return;
       }
       const touch = Array.from(event.changedTouches).find(item => item.touchType === 'stylus');
@@ -686,7 +695,7 @@
 
     for (const button of board.buttons) {
       button.onclick = () => {
-        if (!activePaper || isUploading || board.locked) {
+        if (!activePaper || uploadingBoard || board.locked) {
           return;
         }
         const action = button.dataset.action;
@@ -694,6 +703,7 @@
           return uploadBoard(board);
         }
         finishAllStrokes();
+        board.uploadError = '';
         if (action === 'undo') {
           getBoardStrokes(board).pop();
         } else {
@@ -720,8 +730,12 @@
       board.guide.hidden = !getElement('show-guide').checked;
     }
   };
-  getElement('back').onclick = () => {
-    if (isUploading) {
+  getElement('home-link').onclick = event => {
+    if (!activePaper || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
+      return;
+    }
+    event.preventDefault();
+    if (uploadingBoard) {
       return;
     }
     finishAllStrokes();
@@ -729,8 +743,10 @@
     activePaper = null;
     document.body.classList.remove('writing-mode');
     getElement('editor').hidden = true;
+    getElement('view-progress').hidden = true;
     getElement('home').hidden = false;
     renderHome();
+    window.scrollTo(0, 0);
     showMessage('');
   };
 
@@ -769,7 +785,7 @@
     };
   }
 
-  for (const id of ['back', 'prev', 'next']) {
+  for (const id of ['prev', 'next']) {
     enablePenTap(getElement(id));
   }
   for (const board of boards) {
@@ -786,7 +802,7 @@
     getElement('progress-dialog').showModal();
   };
   async function uploadBoard(board) {
-    if (isUploading || !activePaper || board.locked) {
+    if (uploadingBoard || !activePaper || board.locked) {
       return;
     }
     finishAllStrokes();
@@ -801,10 +817,10 @@
       return;
     }
 
-    isUploading = true;
+    showMessage('');
+    board.uploadError = '';
+    uploadingBoard = board;
     updateEditorControls();
-    const label = board.side === 'regular' ? '工整' : '潦草';
-    showMessage(`上傳${label}筆跡中…`);
     try {
       await InkTraceGitHub.check(githubSettings);
       const result = await InkTraceGitHub.upload(
@@ -822,12 +838,13 @@
         destination,
         at: Date.now(),
       };
-      await saveCurrentDraft();
-      showMessage(board.side === 'regular' ? '工整已上傳，可以書寫潦草版。' : '潦草已上傳。');
+      await saveCurrentDraft(error => {
+        board.uploadError = `本機紀錄儲存失敗：${error.message}`;
+      });
     } catch (error) {
-      showMessage(error.message, true);
+      board.uploadError = error.message;
     } finally {
-      isUploading = false;
+      uploadingBoard = null;
       updateEditorControls();
       fitCanvas();
     }
@@ -909,6 +926,14 @@
 
   function setGithub(value) {
     githubSettings = value;
+    const repoLink = getElement('github-repo');
+    const { owner, repo } = githubSettings;
+    repoLink.hidden = !owner || !repo || repo === '.' || repo === '..';
+    if (repoLink.hidden) {
+      repoLink.removeAttribute('href');
+    } else {
+      repoLink.href = `https://github.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
+    }
     getElement('connection-dot').classList.toggle('connected', githubSettings.configured);
     getElement('connection-dot').setAttribute('aria-label', githubSettings.configured ? '已設定' : '尚未設定');
     try {
@@ -920,7 +945,7 @@
     } catch (_) { }
     renderHome();
     if (activePaper) {
-      refreshCompletedCount();
+      clearUploadErrors();
       updateEditorControls();
     }
   }

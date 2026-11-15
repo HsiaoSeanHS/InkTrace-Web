@@ -344,22 +344,6 @@ h2 {
   color: var(--muted);
 }
 
-.editor-nav {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 15px;
-  margin-bottom: 17px;
-  font-size: 13px;
-  color: var(--muted);
-}
-
-#paper-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .writing-card {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -436,6 +420,16 @@ progress::-moz-progress-bar {
   background: var(--blue-bg);
   color: var(--blue);
   border: 2px solid var(--blue);
+}
+
+.char.partial {
+  background: var(--undo-bg);
+  color: var(--undo);
+}
+
+.char.done.selected {
+  background: var(--done-bg);
+  color: var(--done);
 }
 
 .char.draft:after {
@@ -885,13 +879,6 @@ details p {
     font-size: 12px;
   }
 
-  .editor-nav {
-    font-size: 11px;
-  }
-
-  .editor-nav .text-button {
-    font-size: 12px;
-  }
 }
 
 @media (prefers-reduced-motion:reduce) {
@@ -952,20 +939,7 @@ body.writing-mode {
   flex: 1 1 0;
   min-height: 0;
   display: grid;
-  grid-template-rows: 32px minmax(0, 1fr);
-  gap: 6px;
-}
-
-.writing-mode .editor-nav {
-  margin: 0;
-  min-width: 0;
-  font-size: 12px;
-}
-
-.writing-mode .editor-nav .text-button {
-  min-height: 32px;
-  font-size: 12px;
-  padding: 4px 0;
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .writing-mode .writing-card {
@@ -981,6 +955,7 @@ body.writing-mode {
 .writing-mode .section-head h1 {
   font-size: 20px;
   line-height: 24px;
+  overflow-wrap: anywhere;
 }
 
 .writing-mode .counter {
@@ -1305,11 +1280,6 @@ body.writing-mode {
     padding-bottom: max(4px, env(safe-area-inset-bottom));
   }
 
-  .writing-mode #editor {
-    grid-template-rows: 28px minmax(0, 1fr);
-    gap: 2px;
-  }
-
   .writing-mode .writing-card {
     padding: 8px 12px;
     gap: 4px;
@@ -1375,10 +1345,6 @@ body.writing-mode {
 }
 
 @media (orientation:landscape) and (max-height:400px) {
-  .writing-mode .section-head {
-    display: none;
-  }
-
   .writing-mode .writing-card {
     grid-template-rows: 4px auto minmax(96px, 1fr);
   }
@@ -1447,7 +1413,7 @@ body.writing-mode {
 
 .board {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto 16px;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: 5px;
   min-width: 0;
   min-height: 0;
@@ -1466,8 +1432,7 @@ body.writing-mode {
   font-size: 15px;
 }
 
-.board-heading span,
-.board-link {
+.board-heading span {
   font-size: 11px;
   color: var(--muted);
 }
@@ -1497,10 +1462,6 @@ body.writing-mode {
   white-space: nowrap;
   font-size: 12px;
   border-radius: 12px;
-}
-
-.board-link {
-  color: var(--blue);
 }
 
 .writing-mode .editor-controls {
@@ -1571,34 +1532,6 @@ body.writing-mode {
   }
 }
 
-@media (orientation: landscape) and (max-height: 400px) {
-  .writing-mode .section-head {
-    display: none;
-  }
-
-  .writing-mode .writing-card {
-    grid-template-rows: auto minmax(200px, 1fr) auto;
-  }
-
-  .writing-mode .canvas-area {
-    grid-row: 2;
-  }
-
-  .writing-mode .editor-controls {
-    grid-row: 3;
-  }
-}
-
-@media (orientation: landscape) and (max-height: 400px) and (min-width: 600px) {
-  .writing-mode .writing-card {
-    grid-template-rows: auto minmax(200px, 1fr);
-  }
-
-  .writing-mode .editor-controls {
-    grid-row: 2;
-  }
-}
-
 /* Prevent selection and long-press callouts while writing on touch devices. */
 #editor {
   -webkit-user-select: none;
@@ -1635,6 +1568,19 @@ body.writing-mode {
 }
 
 @media (max-width: 380px) {
+  .writing-mode .topbar,
+  .writing-mode .header-actions {
+    gap: 4px;
+  }
+
+  .writing-mode .brand {
+    font-size: 16px;
+  }
+
+  .writing-mode .header-actions .button {
+    padding-inline: 7px;
+  }
+
   .writing-mode .canvas-head {
     gap: 4px;
   }
@@ -1660,6 +1606,47 @@ body.writing-mode {
   width: 100%;
   height: 4px;
   margin: 0;
+}
+
+.board-status {
+  overflow-wrap: anywhere;
+}
+
+.board-status.error {
+  color: var(--clear);
+}
+
+.board-progress progress[value="1"]::-webkit-progress-value {
+  background: var(--done);
+}
+
+.board-progress progress[value="1"]::-moz-progress-bar {
+  background: var(--done);
+}
+
+.board-progress progress:indeterminate {
+  background: linear-gradient(90deg, var(--blue) 0 36%, var(--blue-bg) 36% 100%);
+  background-size: 200% 100%;
+}
+
+.board-progress progress:indeterminate::-webkit-progress-bar {
+  background: transparent;
+}
+
+.board-progress progress:indeterminate::-moz-progress-bar {
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .board-progress progress:indeterminate {
+    animation: upload-progress 1s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes upload-progress {
+  to {
+    background-position: 100% 0;
+  }
 }
 
 .board-lock {
