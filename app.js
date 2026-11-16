@@ -771,6 +771,7 @@
     }
   }
   getElement('search').oninput = renderHome;
+  getElement('site-info').onclick = () => getElement('site-info-dialog').showModal();
   getElement('view-progress').onclick = () => {
     getElement('progress-grid').replaceChildren();
     for (let i = 0; i < activePaper.chars.length; i++) {

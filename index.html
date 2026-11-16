@@ -29,12 +29,25 @@
           <i id="connection-dot" aria-label="尚未設定">
           </i>
         </button>
+        <button id="site-info" type="button" class="button outline" title="網站資訊" aria-label="網站資訊"
+          aria-haspopup="dialog" aria-controls="site-info-dialog">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 11v5m0-8h.01" />
+          </svg>
+        </button>
       </div>
     </header>
     <main>
       <section id="home" aria-labelledby="home-title">
         <div class="page-heading">
           <h1 id="home-title">稿紙</h1>
+          <div class="home-references">
+            <a class="button outline" href="https://www.kanjisensei.com/kanjiblog/the-ultimate-guide-to-japanese-typography.html"
+              target="_blank" rel="noopener noreferrer">Baseline ↗</a>
+            <a class="button outline" href="https://buttaiwan.github.io/writemyfont/"
+              target="_blank" rel="noopener noreferrer">But Ko ↗</a>
+          </div>
           <button id="add-paper" class="button primary">＋ 新增稿紙</button>
         </div>
         <label class="search-label">
@@ -96,8 +109,8 @@
                 <div class="board-actions">
                   <button class="button undo" data-action="undo">復原</button>
                   <button class="button clear" data-action="clear">清除</button>
-                  <button class="button secondary" data-action="upload" aria-label="上傳工整到 GitHub">上傳 GitHub</button>
-                  <button class="button outline" data-action="download" aria-label="下載工整 SVG">下載 SVG</button>
+                  <button class="button secondary" data-action="upload" aria-label="上傳工整到 GitHub">上傳</button>
+                  <button class="button outline" data-action="download" aria-label="下載工整 SVG">下載</button>
                 </div>
               </section>
               <section class="board" data-board="rough" data-locked aria-labelledby="rough-title">
@@ -120,8 +133,8 @@
                 <div class="board-actions">
                   <button class="button undo" data-action="undo">復原</button>
                   <button class="button clear" data-action="clear">清除</button>
-                  <button class="button secondary" data-action="upload" aria-label="上傳潦草到 GitHub">上傳 GitHub</button>
-                  <button class="button outline" data-action="download" aria-label="下載潦草 SVG">下載 SVG</button>
+                  <button class="button secondary" data-action="upload" aria-label="上傳潦草到 GitHub">上傳</button>
+                  <button class="button outline" data-action="download" aria-label="下載潦草 SVG">下載</button>
                 </div>
               </section>
             </div>
@@ -147,6 +160,14 @@
       <p id="message" class="message" role="status" aria-live="polite">
       </p>
     </main>
+    <dialog id="site-info-dialog" aria-labelledby="site-info-title">
+      <div class="dialog-heading">
+        <h2 id="site-info-title">分享 InkTrace</h2>
+        <button type="button" class="close" data-close="site-info-dialog" aria-label="關閉">×</button>
+      </div>
+      <img class="site-info-qr" src="assets/inktrace-qr.svg" width="250" height="250"
+        alt="掃描 QR Code 開啟 InkTrace Web">
+    </dialog>
     <dialog id="paper-dialog">
       <form id="paper-form">
         <div class="dialog-heading">

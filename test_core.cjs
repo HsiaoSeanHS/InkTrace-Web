@@ -25,6 +25,25 @@ p.drafts[0].roughUploaded = {
 };
 assert.equal(C.count(p, 'owner/repo@main'), 1);
 assert.equal(C.count(p, 'other/repo@main'), 0);
+
+const repeatedPaper = { title: '重複字', chars: ['天', '地', '天', '天', '?', '?'], drafts: {} };
+assert.deepEqual(repeatedPaper.chars.map((_, index) => C.filenameAt(repeatedPaper, index)), [
+  '天.svg', '地.svg', '天-2.svg', '天-3.svg', 'U+3F.svg', 'U+3F-2.svg',
+]);
+const destination = 'owner/repo@main';
+const repeatedUpload = { title: repeatedPaper.title, signature: C.signature(strokes), destination,
+  svgFormat: C.svgFormat };
+for (const index of [0, 2]) {
+  const uploaded = { ...repeatedUpload };
+  repeatedPaper.drafts[index] = { strokes, uploaded };
+  assert.equal(C.done(repeatedPaper, index, destination), false, 'old repeated files need a new upload');
+  uploaded.filename = C.filenameAt(repeatedPaper, index);
+  assert.equal(C.done(repeatedPaper, index, destination), true);
+  repeatedPaper.drafts[index].strokes = roughStrokes;
+  assert.equal(C.done(repeatedPaper, index, destination), false, 'changed strokes need a new upload');
+  assert.equal(C.filenameAt(repeatedPaper, index), uploaded.filename, 'rewriting preserves the filename');
+}
+
 p.drafts[0].strokes = [];
 assert.equal(C.count(p, 'owner/repo@main'), 0);
 

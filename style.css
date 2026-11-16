@@ -230,10 +230,44 @@ main {
 }
 
 .page-heading {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: "title references add";
   align-items: center;
-  justify-content: space-between;
+  gap: 8px 14px;
   margin: 6px 0 22px;
+}
+
+#home-title {
+  grid-area: title;
+}
+
+#add-paper {
+  grid-area: add;
+  white-space: nowrap;
+}
+
+.home-references {
+  grid-area: references;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.page-heading .home-references .button {
+  min-height: 44px;
+  padding: 8px 12px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+@media (max-width: 540px) {
+  .page-heading {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "title add"
+      "references references";
+  }
 }
 
 h1 {
@@ -615,6 +649,32 @@ dialog {
 
 dialog::backdrop {
   background: #0005;
+}
+
+#site-info {
+  min-width: 44px;
+  padding-inline: 10px;
+}
+
+.writing-mode #site-info {
+  display: none;
+}
+
+#site-info-dialog {
+  width: min(340px, calc(100% - 24px));
+}
+
+.site-info-qr {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin-inline: auto;
+}
+
+.site-info-link {
+  display: block;
+  margin-top: 12px;
+  text-align: center;
 }
 
 .dialog-heading {
