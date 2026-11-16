@@ -12,6 +12,12 @@
 
 [GitHub Pages 建立方式](https://docs.github.com/en/pages/getting-started-with-github-pages/creating-a-github-pages-site)
 
+## 修改內建稿紙
+
+在 [papers/built-in.js](papers/built-in.js) 編輯每份稿紙的 `id`、`title` 和 `text`。題字按 `text` 的順序加入，空格與換行會略過。現有清單包含千字文、標點與符號、數字與字母、部首、假名與注音，以及姓名選字。
+
+新增一份時使用不同的 ID 和名稱。首次開啟會加入整份清單，既有瀏覽器只會加入新 ID，並保留同名稿紙及已保存的題序。若要改動已使用的稿紙題字，可給新版新的 ID 和名稱，例如 `symbols-v2` 和「標點與符號 第二版」。
+
 ## 書寫與灰字
 
 - 左欄使用內附的 Noto Sans TC Thin 100，為思源黑體同系的繁體版本。
@@ -34,10 +40,10 @@
 
 升級後，舊格式的上傳紀錄會顯示為待上傳。用目前的草稿再按一次「上傳 GitHub」，即可更新為封閉輪廓。
 
-- 工整筆跡使用原路徑 `font_dataset/稿紙名稱/字.svg`。
+- 工整筆跡使用 `font_dataset/稿紙名稱/工整/字.svg`。
 - 潦草筆跡使用 `font_dataset/稿紙名稱/潦草/字.svg`。
 
-同一路徑重傳會更新原檔。稿紙含重複題字時，同一欄仍對應同一遠端檔案。資料倉庫可與部署網站的倉庫分開。
+同一份稿紙中的重複字依原題字順序編號，例如 `天.svg`、`天-2.svg`、`天-3.svg`。本機下載也使用同一編號，並加上工整或潦草前綴。重寫同一格再上傳會更新原檔。舊版重複字的上傳紀錄會顯示為待上傳，可利用既有草稿補傳。資料倉庫可與部署網站的倉庫分開。
 
 [GitHub Contents API](https://docs.github.com/en/rest/repos/contents#create-or-update-file-contents)
 

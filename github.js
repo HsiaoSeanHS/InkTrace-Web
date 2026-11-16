@@ -69,7 +69,7 @@
     await request(config, '/branches/main');
   }
 
-  async function upload(config, title, character, side, svg) {
+  async function upload(config, title, character, side, svg, filename = root.InkTrace.name(character)) {
     const folders = ['font_dataset', root.InkTrace.title(title)];
     if (side === 'rough') {
       folders.push('潦草');
@@ -77,7 +77,7 @@
     else {
       folders.push('工整')
     }
-    const path = [...folders, root.InkTrace.name(character)].map(encodeURIComponent).join('/');
+    const path = [...folders, filename].map(encodeURIComponent).join('/');
     const endpoint = `/contents/${path}`;
     let sha;
     try {

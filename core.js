@@ -25,19 +25,42 @@
     return chars;
   }
 
-  function paper(name, text) {
+  function paper(name, text, { id = crypto.randomUUID(), createdAt = Date.now() } = {}) {
     return {
-      id: crypto.randomUUID(),
+      id,
       title: title(name),
       chars: characters(text),
       drafts: {},
       selected: 0,
-      createdAt: Date.now()
+      createdAt,
     };
   }
 
-  function name(char) {
-    return (/[\/\\%?#.]/.test(char) ? 'U+' + char.codePointAt(0).toString(16).toUpperCase() : char) + '.svg';
+  function name(char, occurrence = 1) {
+    const stem = /[\/\\%?#.]/.test(char) ? 'U+' + char.codePointAt(0).toString(16).toUpperCase() : char;
+    const suffix = occurrence > 1 ? `-${occurrence}` : '';
+    return `${stem}${suffix}.svg`;
+  }
+
+  const paperFiles = new WeakMap();
+
+  function filesFor(chars) {
+    let files = paperFiles.get(chars);
+    if (!files) {
+      const counts = new Map();
+      const names = chars.map(char => {
+        const occurrence = (counts.get(char) || 0) + 1;
+        counts.set(char, occurrence);
+        return name(char, occurrence);
+      });
+      files = { names, counts };
+      paperFiles.set(chars, files);
+    }
+    return files;
+  }
+
+  function filenameAt(paper, index) {
+    return filesFor(paper.chars).names[index];
   }
 
   function signature(strokes) {
@@ -52,9 +75,16 @@
     const draft = p.drafts[index];
     const fields = boardFields[side];
     const upload = draft?.[fields.upload];
-    return Boolean(upload && upload.svgFormat === SVG_FORMAT &&
-      upload.signature === signature(draft[fields.strokes]) &&
-      upload.title === p.title && upload.destination === destination);
+    if (!upload || upload.svgFormat !== SVG_FORMAT ||
+      upload.signature !== signature(draft[fields.strokes]) ||
+      upload.title !== p.title || upload.destination !== destination) {
+      return false;
+    }
+    const files = filesFor(p.chars);
+    // Legacy records for repeated characters may refer to the same overwritten file.
+    return upload.filename === undefined
+      ? files.counts.get(p.chars[index]) === 1
+      : upload.filename === files.names[index];
   }
 
   function pairDone(p, index, destination) {
@@ -252,6 +282,7 @@
     characters,
     paper,
     name,
+    filenameAt,
     signature,
     done,
     pairDone,

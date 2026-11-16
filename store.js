@@ -60,15 +60,48 @@
     });
   }
 
+  function prepareBuiltInPapers() {
+    const entries = window.InkTraceBuiltInPapers;
+    if (!Array.isArray(entries)) {
+      throw Error('找不到內建稿紙清單，請確認 papers/built-in.js 已載入。');
+    }
+    const ids = new Set();
+    const titles = new Set();
+    const now = Date.now();
+    return entries.map(({ id, title, text }, index) => {
+      if (typeof id !== 'string' || !/^[a-z0-9-]+$/.test(id) || ids.has(id)) {
+        throw Error(`內建稿紙的 ID 無效或重複（第 ${index + 1} 份）。`);
+      }
+      const paper = InkTrace.paper(title, text, { id: `builtin:${id}`, createdAt: now - index });
+      if (titles.has(paper.title)) {
+        throw Error(`內建稿紙名稱重複（${paper.title}）。`);
+      }
+      ids.add(id);
+      titles.add(paper.title);
+      return paper;
+    });
+  }
+
   async function init() {
+    const builtIns = prepareBuiltInPapers();
     await openDatabase();
     await runTransaction(['papers', 'meta'], 'readwrite', transaction => {
       const meta = transaction.objectStore('meta');
-      const request = meta.get('initialized');
-      request.onsuccess = () => {
-        if (!request.result) {
-          putPaperRecord(transaction, InkTrace.paper('基礎練習', '天地玄黃宇宙洪荒'));
-          meta.put(true, 'initialized');
+      const existing = transaction.objectStore('papers').getAll();
+      existing.onsuccess = () => {
+        const ids = new Set(existing.result.map(paper => paper.id));
+        const titles = new Set(existing.result.map(paper => paper.title));
+        for (const paper of builtIns) {
+          const installed = meta.get(paper.id);
+          installed.onsuccess = () => {
+            if (installed.result) {
+              return;
+            }
+            if (!ids.has(paper.id) && !titles.has(paper.title)) {
+              putPaperRecord(transaction, paper);
+            }
+            meta.put(true, paper.id);
+          };
         }
       };
     });

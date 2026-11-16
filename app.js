@@ -789,7 +789,7 @@
     const link = document.createElement('a');
     const style = board.side === 'regular' ? '工整' : '潦草';
     link.href = url;
-    link.download = `${style}-${inkTrace.name(activePaper.chars[characterIndex])}`;
+    link.download = `${style}-${inkTrace.filenameAt(activePaper, characterIndex)}`;
     document.body.append(link);
     link.click();
     link.remove();
@@ -817,6 +817,7 @@
     uploadingBoard = board;
     updateEditorControls();
     try {
+      const filename = inkTrace.filenameAt(activePaper, characterIndex);
       await InkTraceGitHub.check(githubSettings);
       const result = await InkTraceGitHub.upload(
         githubSettings,
@@ -824,9 +825,11 @@
         activePaper.chars[characterIndex],
         board.side,
         inkTrace.svg(ink),
+        filename,
       );
       getCurrentDraft()[board.fields.upload] = {
         ...result,
+        filename,
         svgFormat: inkTrace.svgFormat,
         signature: inkTrace.signature(ink),
         title: activePaper.title,
