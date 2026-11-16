@@ -16,6 +16,6 @@ __pycache__/
 .env.*
 !.env.example
 
-# 
+# markdown
 ARCHITECTURE.md
 LETMEKNOW.md

@@ -1223,6 +1223,14 @@ body.writing-mode {
   font-size: 12px;
 }
 
+.brush-tools label:has(input:disabled) {
+  opacity: .5;
+}
+
+.brush-tools input:disabled {
+  cursor: not-allowed;
+}
+
 .writing-mode .editing-actions {
   margin: 0;
   gap: 8px;
@@ -1730,6 +1738,19 @@ body.writing-mode {
   margin: 0;
 }
 
+.board-progress-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 2px 8px;
+}
+
+.board-stroke-count {
+  margin-inline-start: auto;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .board-status {
   overflow-wrap: anywhere;
 }
@@ -1783,6 +1804,10 @@ body.writing-mode {
   text-align: center;
   font-size: 13px;
   touch-action: none;
+}
+
+.board[data-board="regular"] .board-lock {
+  background: rgb(245 245 246 / 26%);
 }
 
 .board[data-locked] .writing-canvas {

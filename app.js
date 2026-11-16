@@ -13,6 +13,7 @@
     const guide = element.querySelector('.guide-canvas');
     return {
       side,
+      label: side === 'regular' ? '硬筆書法' : '毛筆書法',
       fields: inkTrace.boardFields[side],
       canvas,
       guide,
@@ -24,6 +25,7 @@
       element,
       progress: element.querySelector('progress'),
       status: element.querySelector('.board-status'),
+      strokeCount: element.querySelector('.board-stroke-count'),
       uploadError: '',
       lockMessage: element.querySelector('.board-lock'),
       locked: side === 'rough',
@@ -191,7 +193,7 @@
     button.disabled = Boolean(uploadingBoard);
     button.setAttribute('aria-pressed', String(selected));
     const status = done ? '兩種都已上傳' :
-      partial ? `僅${regularDone ? '工整' : '潦草'}已上傳` :
+      partial ? `僅${regularDone ? boards[0].label : boards[1].label}已上傳` :
       hasDraft ? '有草稿' : '未寫';
     button.setAttribute('aria-label', `${activePaper.chars[index]}，第 ${index + 1} 字，${status}`);
   }
@@ -208,17 +210,11 @@
     return button;
   }
 
-  function setRoughLocked(locked) {
-    const rough = boards[1];
-    rough.locked = locked;
-    rough.element.toggleAttribute('data-locked', locked);
-    rough.canvas.setAttribute('aria-disabled', String(locked));
-    rough.lockMessage.hidden = !locked;
-    if (locked) {
-      for (const button of rough.buttons) {
-        button.disabled = true;
-      }
-    }
+  function setBoardLocked(board, locked) {
+    board.locked = locked;
+    board.element.toggleAttribute('data-locked', locked);
+    board.canvas.setAttribute('aria-disabled', String(locked));
+    board.lockMessage.hidden = !locked;
   }
 
   function clearUploadErrors() {
@@ -227,14 +223,15 @@
     }
   }
 
-  function updateBoardProgress(board, complete) {
+  function updateBoardProgress(board, complete, mismatch) {
     const uploading = uploadingBoard === board;
     const label = uploading ? '上傳中' : complete ? '上傳完成' : '尚未上傳';
-    const status = board.uploadError ? `${label} · ${board.uploadError}` : label;
+    const detail = board.uploadError || (mismatch ? '筆畫數須相同' : '');
+    const status = detail ? `${label} · ${detail}` : label;
     if (board.status.textContent !== status) {
       board.status.textContent = status;
     }
-    board.status.classList.toggle('error', !!board.uploadError);
+    board.status.classList.toggle('error', Boolean(detail));
     board.progress.setAttribute('aria-valuetext', label);
     if (uploading) {
       board.progress.removeAttribute('value');
@@ -265,18 +262,25 @@
     }
 
     const destination = getUploadDestination();
-    setRoughLocked(
-      boards[0].pointer !== null ||
-      !inkTrace.done(activePaper, characterIndex, destination, 'regular')
-    );
-    for (const board of boards) {
-      const complete = inkTrace.done(activePaper, characterIndex, destination, board.side);
-      updateBoardProgress(board, complete);
+    const [regular, rough] = boards;
+    const regularUploaded = regular.pointer === null &&
+      inkTrace.done(activePaper, characterIndex, destination, regular.side);
+    setBoardLocked(regular, regularUploaded);
+    setBoardLocked(rough, !regularUploaded);
 
-      const hasStrokes = getBoardStrokes(board).length > 0;
+    const draft = getCurrentDraft();
+    const targetCount = inkTrace.strokeCount(draft.strokes);
+    for (const board of boards) {
+      const count = inkTrace.strokeCount(draft[board.fields.strokes]);
+      const showTarget = board === rough && regularUploaded;
+      const mismatch = showTarget && count !== targetCount;
+      board.strokeCount.textContent = showTarget ? `${count} / ${targetCount} 筆` : `${count} 筆`;
+      const complete = inkTrace.done(activePaper, characterIndex, destination, board.side);
+      updateBoardProgress(board, complete, mismatch && count > 0);
+
       for (const button of board.buttons) {
-        const alreadyUploaded = button.dataset.action === 'upload' && complete;
-        button.disabled = isUploading || board.locked || !hasStrokes || alreadyUploaded;
+        const uploadBlocked = button.dataset.action === 'upload' && (complete || mismatch);
+        button.disabled = isUploading || (board === rough && board.locked) || !count || uploadBlocked;
       }
     }
     getElement('prev').disabled = isUploading || characterIndex === 0;
@@ -472,6 +476,9 @@
       return false;
     }
     const lines = getBoardStrokes(board);
+    if (board.side === 'rough' && inkTrace.strokeCount(lines) >= inkTrace.strokeCount(getCurrentDraft().strokes)) {
+      return false;
+    }
     board.points = lines.reduce((count, line) => count + line.length, 0);
     if (lines.length >= 1000 || board.points >= 20000) {
       showMessage('筆跡達上限，請復原或清除部分筆畫。', true);
@@ -491,10 +498,6 @@
     board.line = [readPointerPoint(board, event)];
     board.points++;
     lines.push(board.line);
-    if (board.side === 'regular') {
-      setRoughLocked(true);
-      finishStroke(boards[1]);
-    }
     drawPendingSamples(board);
     return true;
   }
@@ -668,7 +671,7 @@
 
     for (const button of board.buttons) {
       button.onclick = () => {
-        if (!activePaper || uploadingBoard || board.locked) {
+        if (!activePaper || button.disabled) {
           return;
         }
         const action = button.dataset.action;
@@ -788,9 +791,8 @@
     const svg = new Blob([inkTrace.svg(strokes)], { type: 'image/svg+xml;charset=utf-8' });
     const url = URL.createObjectURL(svg);
     const link = document.createElement('a');
-    const style = board.side === 'regular' ? '工整' : '潦草';
     link.href = url;
-    link.download = `${style}-${inkTrace.filenameAt(activePaper, characterIndex)}`;
+    link.download = `${board.label}-${inkTrace.filenameAt(activePaper, characterIndex)}`;
     document.body.append(link);
     link.click();
     link.remove();
@@ -804,7 +806,9 @@
     finishAllStrokes();
     const ink = getBoardStrokes(board);
     const destination = getUploadDestination();
-    if (board.locked || !ink.length || inkTrace.done(activePaper, characterIndex, destination, board.side)) {
+    if (board.locked || !inkTrace.strokeCount(ink) ||
+      (board.side === 'rough' && !inkTrace.hasMatchingStrokeCounts(getCurrentDraft())) ||
+      inkTrace.done(activePaper, characterIndex, destination, board.side)) {
       return;
     }
     if (!githubSettings.configured) {

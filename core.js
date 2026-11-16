@@ -71,13 +71,23 @@
     rough: { strokes: 'roughStrokes', upload: 'roughUploaded' },
   };
 
+  function strokeCount(strokes = []) {
+    return strokes.reduce((count, stroke) => count + Number(stroke.length > 0), 0);
+  }
+
+  function hasMatchingStrokeCounts(draft) {
+    const regularCount = strokeCount(draft?.strokes);
+    return regularCount > 0 && regularCount === strokeCount(draft?.roughStrokes);
+  }
+
   function done(p, index, destination, side = 'regular') {
     const draft = p.drafts[index];
     const fields = boardFields[side];
     const upload = draft?.[fields.upload];
     if (!upload || upload.svgFormat !== SVG_FORMAT ||
       upload.signature !== signature(draft[fields.strokes]) ||
-      upload.title !== p.title || upload.destination !== destination) {
+      upload.title !== p.title || upload.destination !== destination ||
+      (side === 'rough' && !hasMatchingStrokeCounts(draft))) {
       return false;
     }
     const files = filesFor(p.chars);
@@ -287,6 +297,8 @@
     done,
     pairDone,
     count,
+    strokeCount,
+    hasMatchingStrokeCounts,
     boardFields,
     svg,
     width,

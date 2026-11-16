@@ -92,56 +92,63 @@
             <div class="board-grid">
               <section class="board" data-board="regular" aria-labelledby="regular-title">
                 <div class="board-heading">
-                  <h2 id="regular-title">硬筆書法(黑體)</h2><span>思源黑體 Thin 100</span>
+                  <h2 id="regular-title">硬筆書法</h2><span>思源黑體 Thin 100</span>
                 </div>
                 <div class="board-progress">
-                  <span class="board-status" role="status">尚未上傳</span>
-                  <progress value="0" max="1" aria-label="工整上傳進度"></progress>
+                  <div class="board-progress-meta">
+                    <span class="board-status" role="status">尚未上傳</span>
+                    <span class="board-stroke-count">0 筆</span>
+                  </div>
+                  <progress value="0" max="1" aria-label="硬筆書法上傳進度"></progress>
                 </div>
                 <div class="canvas-slot">
                   <div class="paper">
                     <canvas class="guide-canvas" width="1000" height="1000" aria-hidden="true">
                     </canvas>
-                    <canvas class="writing-canvas" width="1000" height="1000" aria-label="工整手寫畫布">
+                    <canvas class="writing-canvas" width="1000" height="1000" aria-label="硬筆書法畫布">
                     </canvas>
+                    <div class="board-lock" hidden>硬筆已上傳</div>
                   </div>
                 </div>
                 <div class="board-actions">
                   <button class="button undo" data-action="undo">復原</button>
                   <button class="button clear" data-action="clear">清除</button>
-                  <button class="button secondary" data-action="upload" aria-label="上傳工整到 GitHub">上傳</button>
-                  <button class="button outline" data-action="download" aria-label="下載工整 SVG">下載</button>
+                  <button class="button secondary" data-action="upload" aria-label="上傳硬筆書法到 GitHub">上傳</button>
+                  <button class="button outline" data-action="download" aria-label="下載硬筆書法 SVG">下載</button>
                 </div>
               </section>
               <section class="board" data-board="rough" data-locked aria-labelledby="rough-title">
                 <div class="board-heading">
-                  <h2 id="rough-title">毛筆書法(瘦金體)</h2><span>方正瘦金書 GBK</span>
+                  <h2 id="rough-title">毛筆書法</h2><span>方正瘦金書 GBK</span>
                 </div>
                 <div class="board-progress">
-                  <span class="board-status" role="status">尚未上傳</span>
-                  <progress value="0" max="1" aria-label="潦草上傳進度"></progress>
+                  <div class="board-progress-meta">
+                    <span class="board-status" role="status">尚未上傳</span>
+                    <span class="board-stroke-count">0 筆</span>
+                  </div>
+                  <progress value="0" max="1" aria-label="毛筆書法上傳進度"></progress>
                 </div>
                 <div class="canvas-slot">
                   <div class="paper">
                     <canvas class="guide-canvas" width="1000" height="1000" aria-hidden="true">
                     </canvas>
-                    <canvas class="writing-canvas" width="1000" height="1000" aria-label="潦草手寫畫布" aria-disabled="true">
+                    <canvas class="writing-canvas" width="1000" height="1000" aria-label="毛筆書法畫布" aria-disabled="true">
                     </canvas>
-                    <div class="board-lock" role="status">請先上傳工整版</div>
+                    <div class="board-lock">請先上傳硬筆書法</div>
                   </div>
                 </div>
                 <div class="board-actions">
                   <button class="button undo" data-action="undo">復原</button>
                   <button class="button clear" data-action="clear">清除</button>
-                  <button class="button secondary" data-action="upload" aria-label="上傳潦草到 GitHub">上傳</button>
-                  <button class="button outline" data-action="download" aria-label="下載潦草 SVG">下載</button>
+                  <button class="button secondary" data-action="upload" aria-label="上傳毛筆書法到 GitHub">上傳</button>
+                  <button class="button outline" data-action="download" aria-label="下載毛筆書法 SVG">下載</button>
                 </div>
               </section>
             </div>
           </div>
           <div class="editor-controls">
             <div class="brush-tools">
-              <label>粗細 <input id="width" type="range" min="1" max="24" value="12"><output
+              <label>粗細 <input id="width" type="range" min="1" max="24" value="12" disabled><output
                   id="width-value">12</output>
               </label>
               <label>筆壓 <input id="pressure" type="range" min="0" max="100" value="0"><output

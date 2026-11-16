@@ -26,6 +26,22 @@ p.drafts[0].roughUploaded = {
 assert.equal(C.count(p, 'owner/repo@main'), 1);
 assert.equal(C.count(p, 'other/repo@main'), 0);
 
+assert.equal(C.strokeCount([[], ...strokes]), 1, 'only nonempty strokes count');
+assert.equal(C.hasMatchingStrokeCounts({ strokes: [], roughStrokes: [] }), false);
+assert.equal(C.hasMatchingStrokeCounts(p.drafts[0]), true);
+const mismatchedDraft = {
+  ...p.drafts[0],
+  strokes: [...strokes, ...strokes],
+};
+mismatchedDraft.uploaded = {
+  ...mismatchedDraft.uploaded,
+  signature: C.signature(mismatchedDraft.strokes),
+};
+const mismatchedPaper = { ...p, drafts: { 0: mismatchedDraft } };
+assert.equal(C.done(mismatchedPaper, 0, 'owner/repo@main', 'regular'), true);
+assert.equal(C.done(mismatchedPaper, 0, 'owner/repo@main', 'rough'), false);
+assert.equal(C.count(mismatchedPaper, 'owner/repo@main'), 0, 'legacy mismatched uploads are incomplete');
+
 const repeatedPaper = { title: '重複字', chars: ['天', '地', '天', '天', '?', '?'], drafts: {} };
 assert.deepEqual(repeatedPaper.chars.map((_, index) => C.filenameAt(repeatedPaper, index)), [
   '天.svg', '地.svg', '天-2.svg', '天-3.svg', 'U+3F.svg', 'U+3F-2.svg',
