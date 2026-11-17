@@ -1149,6 +1149,23 @@
   };
   applyTheme();
 
+  function startWebAnalytics() {
+    const { origin, pathname } = window.location;
+    if (origin !== 'https://lctung.github.io' ||
+      (pathname !== '/InkTrace-Web' && !pathname.startsWith('/InkTrace-Web/'))) {
+      return;
+    }
+    const token = document.querySelector('meta[name="cloudflare-web-analytics"]')?.content;
+    if (!token) {
+      return;
+    }
+    const beacon = document.createElement('script');
+    beacon.type = 'module';
+    beacon.src = 'https://static.cloudflareinsights.com/beacon.min.js';
+    beacon.dataset.cfBeacon = JSON.stringify({ token });
+    document.head.append(beacon);
+  }
+
   async function init() {
     try {
       await PaperStore.init();
@@ -1172,4 +1189,5 @@
     }
   }
   init();
+  startWebAnalytics();
 })();
