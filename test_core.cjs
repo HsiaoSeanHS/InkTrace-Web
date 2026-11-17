@@ -12,6 +12,8 @@ const p = { title: '稿紙', chars: ['天'], drafts: { 0: { strokes } } };
 assert.equal(C.count(p, 'owner/repo@main'), 0);
 p.drafts[0].uploaded = { title: p.title, signature: C.signature(strokes), destination: 'owner/repo@main' };
 assert.equal(C.done(p, 0, 'owner/repo@main'), false, 'legacy SVG can be re-uploaded');
+p.drafts[0].uploaded.svgFormat = 'filled-outline-v1';
+assert.equal(C.done(p, 0, 'owner/repo@main'), false, 'uploads using the centered format can be replaced');
 p.drafts[0].uploaded.svgFormat = C.svgFormat;
 assert.equal(C.done(p, 0, 'owner/repo@main'), true);
 assert.equal(C.count(p, 'owner/repo@main'), 0);
@@ -79,20 +81,25 @@ for (const [, path] of paths) {
   assert.match(path, /^M .* Z$/);
 }
 assert.match(paths[2][1], / Z M /, 'a reversal retains filled ink on both sides');
-assert.match(C.svg(strokes), /M 292 150 .*L 8 150/, 'dot is centered and retains its diameter');
+assert.match(C.svg(strokes), /M 12 15 .*L 3 15/, 'dot keeps its position and diameter in the frame');
 assert.throws(() => C.svg([[]]), /請先寫字/);
-const m = {
-  actualBoundingBoxLeft: 3,
-  actualBoundingBoxRight: 83,
-  actualBoundingBoxAscent: 77,
-  actualBoundingBoxDescent: 13
-};
-const fit = C.fitBounds(m, 1000);
-const left = (fit.x - m.actualBoundingBoxLeft) * fit.scale + 500;
-const right = (fit.x + m.actualBoundingBoxRight) * fit.scale + 500;
-const top = (fit.y - m.actualBoundingBoxAscent) * fit.scale + 500;
-const bottom = (fit.y + m.actualBoundingBoxDescent) * fit.scale + 500;
-assert.ok(Math.abs((left + right) / 2 - 500) < 1e-8);
-assert.ok(Math.abs((top + bottom) / 2 - 500) < 1e-8);
-assert.ok(Math.abs(Math.max(right - left, bottom - top) - 850) < 1e-8);
-console.log('PASS: prompt import, duplicate characters, pressure, upload completion/destination, guide center and 85% bounds.');
+
+const point = (x, y, width = 12) => ({ x, y, width });
+assert.deepEqual(C.clipSegment(point(380, 20, 8), point(420, 40, 12)), [
+  point(380, 20, 8), point(400, 30, 10),
+]);
+assert.deepEqual(C.clipSegment(point(-40, 20), point(440, 20)), [
+  point(0, 20), point(400, 20),
+]);
+assert.equal(C.clipSegment(point(420, 20), point(440, 60)), null);
+assert.equal(C.clipSegment(point(20, -20), point(40, -20)), null);
+const edgeStroke = [point(390, 40), point(400, 50),
+  { ...point(400, 160), move: true }, point(380, 180)];
+const edgeSvg = C.svg([edgeStroke]);
+const [edgePath] = [...edgeSvg.matchAll(/<path d="([^"]+)"/g)].map(match => match[1]);
+assert.equal((edgePath.match(/M /g) ?? []).length, 2, 'one stroke may have two disjoint visible parts');
+const edgePoints = [...edgePath.matchAll(/[ML] ([\d.]+) ([\d.]+)/g)].map(([, x, y]) => [Number(x), Number(y)]);
+assert(edgePoints.some(([x]) => x === 300), 'a departing stroke reaches the frame edge');
+assert(edgePoints.every(([x, y]) => x >= 0 && x <= 300 && y >= 0 && y <= 300));
+assert(!edgePoints.some(([, y]) => y > 50 && y < 110), 'there is no line bridging the off-canvas excursion');
+console.log('PASS: prompt import, duplicate characters, pressure, upload completion and frame-preserving SVG clipping.');

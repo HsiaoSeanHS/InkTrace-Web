@@ -1,7 +1,9 @@
 (function (root) {
   'use strict';
 
-  const SVG_FORMAT = 'filled-outline-v1';
+  const SVG_FORMAT = 'filled-outline-v2';
+  const CANVAS_SIZE = 400;
+  const SVG_SIZE = 300;
   const SIMPLIFY_DISTANCE = 2;
   const SMOOTH_RADIUS = 2;
   const CAP_SEGMENTS = 8;
@@ -103,6 +105,46 @@
 
   function count(p, dest) {
     return p.chars.reduce((n, _, i) => n + Number(pairDone(p, i, dest)), 0);
+  }
+
+  function insideCanvas(point) {
+    return point.x >= 0 && point.x <= CANVAS_SIZE && point.y >= 0 && point.y <= CANVAS_SIZE;
+  }
+
+  function interpolatePoint(start, end, fraction) {
+    return {
+      x: start.x + (end.x - start.x) * fraction,
+      y: start.y + (end.y - start.y) * fraction,
+      width: start.width + (end.width - start.width) * fraction,
+    };
+  }
+
+  function clipSegment(start, end) {
+    let enter = 0;
+    let exit = 1;
+    for (const axis of ['x', 'y']) {
+      const delta = end[axis] - start[axis];
+      if (delta === 0) {
+        if (start[axis] < 0 || start[axis] > CANVAS_SIZE) {
+          return null;
+        }
+        continue;
+      }
+      const first = -start[axis] / delta;
+      const last = (CANVAS_SIZE - start[axis]) / delta;
+      enter = Math.max(enter, Math.min(first, last));
+      exit = Math.min(exit, Math.max(first, last));
+      if (enter > exit) {
+        return null;
+      }
+    }
+    return [enter, exit].map(fraction => {
+      const point = interpolatePoint(start, end, fraction);
+      // Clamp rounding error at the calculated intersection.
+      point.x = Math.min(CANVAS_SIZE, Math.max(0, point.x));
+      point.y = Math.min(CANVAS_SIZE, Math.max(0, point.y));
+      return point;
+    });
   }
 
   function prepareStroke(stroke) {
@@ -213,36 +255,69 @@
     return contours;
   }
 
+  function contoursForStroke(stroke) {
+    const contours = [];
+    let start = 0;
+    for (let index = 1; index < stroke.length; index++) {
+      if (stroke[index].move) {
+        contours.push(...strokeContours(stroke.slice(start, index)));
+        start = index;
+      }
+    }
+    contours.push(...strokeContours(stroke.slice(start)));
+    return contours;
+  }
+
+  function clipContour(contour) {
+    if (contour.every(insideCanvas)) {
+      return contour;
+    }
+    for (const [axis, limit, sign] of [
+      ['x', 0, 1], ['x', CANVAS_SIZE, -1], ['y', 0, 1], ['y', CANVAS_SIZE, -1],
+    ]) {
+      if (!contour.length) {
+        break;
+      }
+      const clipped = [];
+      let previous = contour.at(-1);
+      let previousInside = (previous[axis] - limit) * sign >= 0;
+      for (const point of contour) {
+        const inside = (point[axis] - limit) * sign >= 0;
+        if (inside !== previousInside) {
+          const t = (limit - previous[axis]) / (point[axis] - previous[axis]);
+          const otherAxis = axis === 'x' ? 'y' : 'x';
+          clipped.push({ [axis]: limit, [otherAxis]: previous[otherAxis] +
+            (point[otherAxis] - previous[otherAxis]) * t });
+        }
+        if (inside) {
+          clipped.push(point);
+        }
+        previous = point;
+        previousInside = inside;
+      }
+      contour = clipped;
+    }
+    return contour;
+  }
+
   function svg(strokes) {
-    const outlines = strokes.filter(stroke => stroke.length).map(strokeContours);
+    const outlines = strokes.filter(stroke => stroke.length).map(stroke =>
+      contoursForStroke(stroke).map(clipContour).filter(contour => contour.length >= 3)
+    ).filter(contours => contours.length);
     if (!outlines.length) {
       throw Error('請先寫字。');
     }
 
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
-    for (const contours of outlines) {
-      for (const contour of contours) {
-        for (const point of contour) {
-          minX = Math.min(minX, point.x);
-          minY = Math.min(minY, point.y);
-          maxX = Math.max(maxX, point.x);
-          maxY = Math.max(maxY, point.y);
-        }
-      }
-    }
-    const scale = 284 / Math.max(maxX - minX, maxY - minY, 1);
+    const scale = SVG_SIZE / CANVAS_SIZE;
     const format = value => Number(value.toFixed(5));
-    const centerX = (minX + maxX) / 2;
-    const centerY = (minY + maxY) / 2;
-    const elements = ['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" width="300" height="300">'];
+    const elements = [
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${SVG_SIZE} ${SVG_SIZE}" width="${SVG_SIZE}" height="${SVG_SIZE}">`,
+    ];
     for (const contours of outlines) {
       const path = contours.map(contour => {
         const commands = contour.map((point, index) => {
-          const x = format(150 + (point.x - centerX) * scale);
-          const y = format(150 + (point.y - centerY) * scale);
+          const x = format(point.x * scale);
+          const y = format(point.y * scale);
           return `${index === 0 ? 'M' : 'L'} ${x} ${y}`;
         });
         return `${commands.join(' ')} Z`;
@@ -272,22 +347,9 @@
     return p;
   }
 
-  function fitBounds(metrics, size, fraction = 0.85) {
-    const extent = Math.max(
-      metrics.actualBoundingBoxLeft + metrics.actualBoundingBoxRight,
-      metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent,
-    );
-    if (!Number.isFinite(extent) || extent <= 0) {
-      return null;
-    }
-    return {
-      scale: size * fraction / extent,
-      x: (metrics.actualBoundingBoxLeft - metrics.actualBoundingBoxRight) / 2,
-      y: (metrics.actualBoundingBoxAscent - metrics.actualBoundingBoxDescent) / 2,
-    };
-  }
   const api = {
     svgFormat: SVG_FORMAT,
+    canvasSize: CANVAS_SIZE,
     title,
     characters,
     paper,
@@ -300,10 +362,11 @@
     strokeCount,
     hasMatchingStrokeCounts,
     boardFields,
+    insideCanvas,
+    clipSegment,
     svg,
     width,
     parseJSON,
-    fitBounds
   };
   root.InkTrace = api;
   if (typeof module !== 'undefined') {

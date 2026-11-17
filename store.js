@@ -84,23 +84,37 @@
 
   async function init() {
     const builtIns = prepareBuiltInPapers();
+    const isLocalPreview = ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
+    const stores = isLocalPreview ? ['papers', 'meta', 'drafts'] : ['papers', 'meta'];
     await openDatabase();
-    await runTransaction(['papers', 'meta'], 'readwrite', transaction => {
+    await runTransaction(stores, 'readwrite', transaction => {
       const meta = transaction.objectStore('meta');
       const existing = transaction.objectStore('papers').getAll();
       existing.onsuccess = () => {
-        const ids = new Set(existing.result.map(paper => paper.id));
+        const papersById = new Map(existing.result.map(paper => [paper.id, paper]));
         const titles = new Set(existing.result.map(paper => paper.title));
         for (const paper of builtIns) {
           const installed = meta.get(paper.id);
           installed.onsuccess = () => {
-            if (installed.result) {
+            if (installed.result && !isLocalPreview) {
               return;
             }
-            if (!ids.has(paper.id) && !titles.has(paper.title)) {
+            const saved = papersById.get(paper.id);
+            if (!saved && !titles.has(paper.title)) {
               putPaperRecord(transaction, paper);
             }
-            meta.put(true, paper.id);
+            if (isLocalPreview && saved?.title === paper.title &&
+              (saved.chars.length !== paper.chars.length || saved.chars.some((char, i) => char !== paper.chars[i]))) {
+              const drafts = transaction.objectStore('drafts').count(draftRange(paper.id));
+              drafts.onsuccess = () => {
+                if (drafts.result === 0) {
+                  putPaperRecord(transaction, { ...saved, chars: paper.chars, selected: 0 });
+                }
+              };
+            }
+            if (!installed.result) {
+              meta.put(true, paper.id);
+            }
           };
         }
       };
@@ -110,6 +124,10 @@
   function putPaperRecord(transaction, paper) {
     const { drafts, ...metadata } = paper;
     transaction.objectStore('papers').put(metadata);
+  }
+
+  function draftRange(paperId) {
+    return IDBKeyRange.bound([paperId, 0], [paperId, Number.MAX_SAFE_INTEGER]);
   }
 
   function all() {
@@ -146,8 +164,7 @@
     },
     remove: paperId => runTransaction(['papers', 'drafts'], 'readwrite', transaction => {
       transaction.objectStore('papers').delete(paperId);
-      const range = IDBKeyRange.bound([paperId, 0], [paperId, Number.MAX_SAFE_INTEGER]);
-      transaction.objectStore('drafts').delete(range);
+      transaction.objectStore('drafts').delete(draftRange(paperId));
     }),
   };
 })();

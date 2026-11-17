@@ -5,12 +5,28 @@
   const inkTrace = InkTrace;
   const CANVAS_SIZE_KEY = 'inktrace-web-canvas-size';
   const MIN_SAMPLE_DISTANCE = 0.4;
-  const SHOUJIN_GUIDE_FONT = '400 100px InkTraceShoujin';
+  const GUIDE_SIZE = 1000;
+  const GUIDE_FONT_SIZE = 650;
+  const GUIDE_BASELINE = 0.75;
+  // Measure H, x, the tallest ascender and the deepest descender in each bundled font.
+  const LATIN_GUIDE_POSITIONS = {
+    regular: { ascender: 22.5, 'cap-height': 27.8, 'x-height': 40.7, descender: 91.7 },
+    rough: { ascender: 31, 'cap-height': 32.5, 'x-height': 46, descender: 94.9 },
+  };
+
+  function guideFont(side) {
+    return side === 'regular' ? `100 ${GUIDE_FONT_SIZE}px InkTraceGuide` : `400 ${GUIDE_FONT_SIZE}px InkTraceShoujin`;
+  }
 
   const boards = Array.from(document.querySelectorAll('[data-board]'), element => {
     const side = element.dataset.board;
     const canvas = element.querySelector('.writing-canvas');
     const guide = element.querySelector('.guide-canvas');
+    const paper = element.querySelector('.paper');
+    paper.style.setProperty('--guide-baseline', `${GUIDE_BASELINE * 100}%`);
+    for (const [line, position] of Object.entries(LATIN_GUIDE_POSITIONS[side])) {
+      paper.style.setProperty(`--guide-${line}`, `${position}%`);
+    }
     return {
       side,
       label: side === 'regular' ? '硬筆書法' : '毛筆書法',
@@ -20,7 +36,8 @@
       ctx: canvas.getContext('2d'),
       guideContext: guide.getContext('2d'),
       slot: element.querySelector('.canvas-slot'),
-      paper: element.querySelector('.paper'),
+      info: element.querySelector('.board-info'),
+      paper,
       buttons: Array.from(element.querySelectorAll('[data-action]')),
       element,
       progress: element.querySelector('progress'),
@@ -32,6 +49,7 @@
       pointer: null,
       pointerType: '',
       strokeRect: null,
+      lastPointerPoint: null,
       frame: 0,
       drawnPoints: 0,
       line: null,
@@ -304,7 +322,7 @@
   }
 
   function drawSample(context, point, previous) {
-    if (previous) {
+    if (previous && !point.move) {
       context.lineWidth = (previous.width + point.width) / 2;
       context.beginPath();
       context.moveTo(previous.x, previous.y);
@@ -318,8 +336,9 @@
 
   function drawStrokes(board) {
     const { ctx } = board;
-    ctx.setTransform(2.5, 0, 0, 2.5, 0, 0);
-    ctx.clearRect(0, 0, 400, 400);
+    const scale = GUIDE_SIZE / inkTrace.canvasSize;
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    ctx.clearRect(0, 0, inkTrace.canvasSize, inkTrace.canvasSize);
     ctx.fillStyle = ctx.strokeStyle = '#111';
     ctx.lineCap = ctx.lineJoin = 'round';
     for (const line of getBoardStrokes(board)) {
@@ -358,26 +377,24 @@
       return;
     }
     const character = activePaper.chars[characterIndex];
+    const isLatin = /\p{Script=Latin}/u.test(character) && /\p{Letter}/u.test(character);
+    const showBaseline = /[\p{Script=Latin}\p{Decimal_Number}]/u.test(character);
     for (const board of boards) {
       const ctx = board.guideContext;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.clearRect(0, 0, 1000, 1000);
+      ctx.clearRect(0, 0, GUIDE_SIZE, GUIDE_SIZE);
+      board.paper.toggleAttribute('data-show-baseline', showBaseline);
+      board.paper.toggleAttribute('data-latin-letter', isLatin);
       if (board.side === 'rough' && (!shoujinFontLoaded || !InkTraceShoujin.hasGlyph(character))) {
         continue;
       }
 
-      ctx.font = board.side === 'regular'
-        ? '100 100px InkTraceGuide, sans-serif'
-        : SHOUJIN_GUIDE_FONT;
-      ctx.textAlign = 'left';
+      const font = guideFont(board.side);
+      ctx.font = board.side === 'regular' ? `${font}, sans-serif` : font;
+      ctx.textAlign = 'center';
       ctx.textBaseline = 'alphabetic';
-      const fit = inkTrace.fitBounds(ctx.measureText(character), 1000);
-      if (!fit) {
-        continue;
-      }
-      ctx.setTransform(fit.scale, 0, 0, fit.scale, 500, 500);
       ctx.fillStyle = '#e9e9e9';
-      ctx.fillText(character, fit.x, fit.y);
+      ctx.fillText(character, GUIDE_SIZE / 2, GUIDE_SIZE * GUIDE_BASELINE);
     }
   }
 
@@ -411,7 +428,7 @@
 
   function readPointerPoint(board, event, release = false) {
     const rect = board.strokeRect;
-    const previous = board.line?.at(-1);
+    const previous = board.lastPointerPoint;
     const width = release && previous ? previous.width : inkTrace.width(
       Number(getElement('width').value),
       ['pen', 'stylus'].includes(event.pointerType)
@@ -419,10 +436,9 @@
         : 1,
       Number(getElement('pressure').value) / 100,
     );
-    const margin = width / 2;
     return {
-      x: Math.max(margin, Math.min(400 - margin, (event.clientX - rect.left) / rect.width * 400)),
-      y: Math.max(margin, Math.min(400 - margin, (event.clientY - rect.top) / rect.height * 400)),
+      x: (event.clientX - rect.left) / rect.width * inkTrace.canvasSize,
+      y: (event.clientY - rect.top) / rect.height * inkTrace.canvasSize,
       width,
     };
   }
@@ -433,6 +449,7 @@
     board.pointer = null;
     board.pointerType = '';
     board.strokeRect = null;
+    board.lastPointerPoint = null;
     if (typeof pointer === 'number' && board.canvas.hasPointerCapture(pointer)) {
       board.canvas.releasePointerCapture(pointer);
     }
@@ -495,22 +512,49 @@
     board.pointer = event.pointerId;
     board.pointerType = event.pointerType;
     board.drawnPoints = 0;
-    board.line = [readPointerPoint(board, event)];
-    board.points++;
-    lines.push(board.line);
+    board.line = [];
+    board.lastPointerPoint = readPointerPoint(board, event);
+    if (inkTrace.insideCanvas(board.lastPointerPoint)) {
+      recordStrokePoint(board, board.lastPointerPoint);
+    }
     drawPendingSamples(board);
     return true;
   }
 
-  function appendStrokeSample(board, sample, release = false) {
+  function recordStrokePoint(board, point) {
     if (board.points >= 20000) {
       return;
     }
+    if (!board.line.length) {
+      getBoardStrokes(board).push(board.line);
+    }
+    board.line.push(point);
+    board.points++;
+  }
+
+  function appendStrokeSample(board, sample, release = false) {
+    const previous = board.lastPointerPoint;
     const next = readPointerPoint(board, sample, release);
+    board.lastPointerPoint = next;
+    const previousInside = inkTrace.insideCanvas(previous);
+    const nextInside = inkTrace.insideCanvas(next);
+    if (!previousInside || !nextInside) {
+      const visible = inkTrace.clipSegment(previous, next);
+      if (!visible) {
+        return;
+      }
+      const [entry, exit] = visible;
+      if (!previousInside) {
+        recordStrokePoint(board, { ...entry, move: true });
+      }
+      if (entry.x !== exit.x || entry.y !== exit.y) {
+        recordStrokePoint(board, exit);
+      }
+      return;
+    }
     const last = board.line.at(-1);
-    if (Math.hypot(next.x - last.x, next.y - last.y) >= MIN_SAMPLE_DISTANCE) {
-      board.line.push(next);
-      board.points++;
+    if (!last || Math.hypot(next.x - last.x, next.y - last.y) >= MIN_SAMPLE_DISTANCE) {
+      recordStrokePoint(board, next);
     }
   }
 
@@ -1043,7 +1087,7 @@
       }
       const availableSize = Math.floor(Math.min(maxCanvasSize, ...boards.flatMap(board => {
         const rect = board.slot.getBoundingClientRect();
-        return [rect.width, rect.height];
+        return [rect.width, rect.height - board.info.getBoundingClientRect().height];
       })));
       if (availableSize <= 0) {
         return;
@@ -1066,6 +1110,7 @@
     const observer = new ResizeObserver(fitCanvas);
     for (const board of boards) {
       observer.observe(board.slot);
+      observer.observe(board.info);
     }
   }
   window.addEventListener('resize', fitCanvas);
@@ -1116,8 +1161,8 @@
         }
       } catch { }
       setGithub(githubSettings);
-      document.fonts.load('100 100px InkTraceGuide').then(drawGuides).catch(() => { });
-      document.fonts.load(SHOUJIN_GUIDE_FONT).then(faces => {
+      document.fonts.load(guideFont('regular')).then(drawGuides).catch(() => { });
+      document.fonts.load(guideFont('rough')).then(faces => {
         shoujinFontLoaded = faces.length > 0 && faces.every(face => face.status === 'loaded');
         drawGuides();
       }).catch(() => { });

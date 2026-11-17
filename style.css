@@ -456,20 +456,15 @@ progress::-moz-progress-bar {
   border-color: transparent;
 }
 
-.char.selected {
-  background: var(--blue-bg);
-  color: var(--blue);
-  border: 2px solid var(--blue);
-}
-
 .char.partial {
   background: var(--undo-bg);
   color: var(--undo);
 }
 
-.char.done.selected {
-  background: var(--done-bg);
-  color: var(--done);
+.char.selected {
+  background: var(--surface);
+  color: var(--muted);
+  border: 2px solid var(--blue);
 }
 
 .char.draft:after {
@@ -497,20 +492,20 @@ progress::-moz-progress-bar {
   box-shadow: 0 7px 30px #0000000a;
 }
 
-.paper:before,
-.paper:after {
+.paper:not([data-latin-letter])::before,
+.paper:not([data-latin-letter])::after {
   content: "";
   position: absolute;
   pointer-events: none;
 }
 
-.paper:before {
+.paper:not([data-latin-letter])::before {
   height: 100%;
   left: 50%;
   border-left: 1px dashed #dedede;
 }
 
-.paper:after {
+.paper:not([data-latin-letter])::after {
   width: 100%;
   top: 50%;
   border-top: 1px dashed #dedede;
@@ -1064,10 +1059,15 @@ body.writing-mode {
 
 .writing-mode .characters .char {
   aspect-ratio: auto;
-  height: 44px;
+  height: 54px;
   min-width: 44px;
   font-size: 23px;
   border-radius: 9px;
+  padding-block-end: 6px;
+}
+
+.writing-mode .characters .char.draft::after {
+  bottom: 5px;
 }
 
 .writing-mode .canvas-area {
@@ -1175,16 +1175,16 @@ body.writing-mode {
 .writing-mode .canvas-slot {
   min-height: 0;
   min-width: 0;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  place-items: center;
 }
 
 .writing-mode .paper {
   width: 100%;
   max-height: 100%;
-  flex: none;
-  border-radius: 14px;
+  border-radius: 0;
 }
 
 .editor-controls {
@@ -1448,7 +1448,7 @@ body.writing-mode {
   }
 
   .writing-mode .characters .char {
-    height: 44px;
+    height: 50px;
     font-size: 20px;
   }
 
@@ -1564,10 +1564,17 @@ body.writing-mode {
 
 .board {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) auto;
   gap: 5px;
   min-width: 0;
   min-height: 0;
+}
+
+.board-info {
+  display: grid;
+  width: 100%;
+  gap: 5px;
+  padding-block-end: 9px;
 }
 
 .board-heading {
@@ -1592,6 +1599,53 @@ body.writing-mode {
   position: absolute;
   inset: 0;
   pointer-events: none;
+}
+
+.writing-baseline {
+  display: none;
+  position: absolute;
+  inset: var(--guide-baseline) 0 auto;
+  border-top: 1px solid #d49b9b;
+  pointer-events: none;
+}
+
+.paper[data-show-baseline] .writing-baseline {
+  display: block;
+}
+
+.writing-latin-guides {
+  display: none;
+  pointer-events: none;
+}
+
+.paper[data-latin-letter] .writing-latin-guides {
+  display: block;
+}
+
+.writing-latin-guides span {
+  position: absolute;
+  inset: var(--line-position) 0 auto;
+  border-top: 1px solid #e0e0e0;
+}
+
+.writing-ascender {
+  --line-position: var(--guide-ascender);
+}
+
+.writing-cap-height {
+  --line-position: var(--guide-cap-height);
+}
+
+.writing-latin-guides .writing-ascender {
+  border-top-style: dashed;
+}
+
+.writing-x-height {
+  --line-position: var(--guide-x-height);
+}
+
+.writing-descender {
+  --line-position: var(--guide-descender);
 }
 
 .writing-canvas {
@@ -1727,7 +1781,6 @@ body.writing-mode {
 .board-progress {
   display: grid;
   gap: 4px;
-  margin-bottom: 4px;
   font-size: 12px;
   color: var(--muted);
 }
