@@ -45,6 +45,8 @@
           <div class="home-references">
             <a class="button outline" href="https://www.kanjisensei.com/kanjiblog/the-ultimate-guide-to-japanese-typography.html"
               target="_blank" rel="noopener noreferrer">Baseline ↗</a>
+            <a class="button outline" href="https://international.binus.ac.id/graphic-design/2021/09/23/understanding-typography/"
+              target="_blank" rel="noopener noreferrer">Typeface ↗</a>
             <a class="button outline" href="https://buttaiwan.github.io/writemyfont/"
               target="_blank" rel="noopener noreferrer">But Ko ↗</a>
           </div>
@@ -91,56 +93,62 @@
             </div>
             <div class="board-grid">
               <section class="board" data-board="regular" aria-labelledby="regular-title">
-                <div class="board-heading">
-                  <h2 id="regular-title">硬筆書法</h2><span>思源黑體 Thin 100</span>
-                </div>
-                <div class="board-progress">
-                  <div class="board-progress-meta">
-                    <span class="board-status" role="status">尚未上傳</span>
-                    <span class="board-stroke-count">0 筆</span>
-                  </div>
-                  <progress value="0" max="1" aria-label="硬筆書法上傳進度"></progress>
-                </div>
                 <div class="canvas-slot">
+                  <div class="board-info">
+                    <div class="board-heading">
+                      <h2 id="regular-title">硬筆書法</h2><span>思源黑體 Thin 100</span>
+                    </div>
+                    <div class="board-progress">
+                      <div class="board-progress-meta">
+                        <span class="board-status" role="status">尚未上傳</span>
+                        <span class="board-stroke-count">0 筆</span>
+                      </div>
+                      <progress value="0" max="1" aria-label="硬筆書法上傳進度"></progress>
+                    </div>
+                  </div>
                   <div class="paper">
                     <canvas class="guide-canvas" width="1000" height="1000" aria-hidden="true">
                     </canvas>
+                    <span class="writing-baseline" aria-hidden="true"></span>
                     <canvas class="writing-canvas" width="1000" height="1000" aria-label="硬筆書法畫布">
                     </canvas>
                     <div class="board-lock" hidden>硬筆已上傳</div>
                   </div>
                 </div>
                 <div class="board-actions">
-                  <button class="button undo" data-action="undo">復原</button>
-                  <button class="button clear" data-action="clear">清除</button>
-                  <button class="button secondary" data-action="upload" aria-label="上傳硬筆書法到 GitHub">上傳</button>
+                  <button class="button outline" data-action="undo">復原</button>
+                  <button class="button outline" data-action="clear">清除</button>
+                  <button class="button outline" data-action="upload" aria-label="上傳硬筆書法到 GitHub">上傳</button>
                   <button class="button outline" data-action="download" aria-label="下載硬筆書法 SVG">下載</button>
                 </div>
               </section>
               <section class="board" data-board="rough" data-locked aria-labelledby="rough-title">
-                <div class="board-heading">
-                  <h2 id="rough-title">毛筆書法</h2><span>方正瘦金書 GBK</span>
-                </div>
-                <div class="board-progress">
-                  <div class="board-progress-meta">
-                    <span class="board-status" role="status">尚未上傳</span>
-                    <span class="board-stroke-count">0 筆</span>
-                  </div>
-                  <progress value="0" max="1" aria-label="毛筆書法上傳進度"></progress>
-                </div>
                 <div class="canvas-slot">
+                  <div class="board-info">
+                    <div class="board-heading">
+                      <h2 id="rough-title">毛筆書法</h2><span>方正瘦金書 GBK</span>
+                    </div>
+                    <div class="board-progress">
+                      <div class="board-progress-meta">
+                        <span class="board-status" role="status">尚未上傳</span>
+                        <span class="board-stroke-count">0 筆</span>
+                      </div>
+                      <progress value="0" max="1" aria-label="毛筆書法上傳進度"></progress>
+                    </div>
+                  </div>
                   <div class="paper">
                     <canvas class="guide-canvas" width="1000" height="1000" aria-hidden="true">
                     </canvas>
+                    <span class="writing-baseline" aria-hidden="true"></span>
                     <canvas class="writing-canvas" width="1000" height="1000" aria-label="毛筆書法畫布" aria-disabled="true">
                     </canvas>
                     <div class="board-lock">請先上傳硬筆書法</div>
                   </div>
                 </div>
                 <div class="board-actions">
-                  <button class="button undo" data-action="undo">復原</button>
-                  <button class="button clear" data-action="clear">清除</button>
-                  <button class="button secondary" data-action="upload" aria-label="上傳毛筆書法到 GitHub">上傳</button>
+                  <button class="button outline" data-action="undo">復原</button>
+                  <button class="button outline" data-action="clear">清除</button>
+                  <button class="button outline" data-action="upload" aria-label="上傳毛筆書法到 GitHub">上傳</button>
                   <button class="button outline" data-action="download" aria-label="下載毛筆書法 SVG">下載</button>
                 </div>
               </section>
@@ -159,7 +167,7 @@
               <a id="github-repo" class="button outline" target="_blank" rel="noopener noreferrer"
                 aria-label="開啟 GitHub 儲存倉庫" hidden>GitHub ↗</a>
               <button id="prev" class="button outline" aria-label="上一字">←</button>
-              <button id="next" class="button secondary">下一字 →</button>
+              <button id="next" class="button outline">下一字 →</button>
             </div>
           </div>
         </section>
