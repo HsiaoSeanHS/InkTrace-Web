@@ -281,19 +281,22 @@
 
     const destination = getUploadDestination();
     const [regular, rough] = boards;
+    const draft = getCurrentDraft();
     const regularUploaded = regular.pointer === null &&
       inkTrace.done(activePaper, characterIndex, destination, regular.side);
+    const roughUploaded = inkTrace.done(activePaper, characterIndex, destination, rough.side);
+    const released = regularUploaded && roughUploaded && draft.releasedStrokeCount;
     setBoardLocked(regular, regularUploaded);
-    setBoardLocked(rough, !regularUploaded);
+    setBoardLocked(rough, !regularUploaded || Boolean(released));
+    rough.lockMessage.textContent = released ? '毛筆已上傳' : '請先上傳硬筆書法';
 
-    const draft = getCurrentDraft();
     const targetCount = inkTrace.strokeCount(draft.strokes);
     for (const board of boards) {
       const count = inkTrace.strokeCount(draft[board.fields.strokes]);
-      const showTarget = board === rough && regularUploaded;
+      const showTarget = board === rough && regularUploaded && !released;
       const mismatch = showTarget && count !== targetCount;
-      board.strokeCount.textContent = showTarget ? `${count} / ${targetCount} 筆` : `${count} 筆`;
-      const complete = inkTrace.done(activePaper, characterIndex, destination, board.side);
+      board.strokeCount.textContent = showTarget ? `${count} / ${targetCount} 筆` : `${released || count} 筆`;
+      const complete = board === regular ? regularUploaded : roughUploaded;
       updateBoardProgress(board, complete, mismatch && count > 0);
 
       for (const button of board.buttons) {
@@ -476,6 +479,10 @@
       return;
     }
     drawPendingSamples(board);
+    const draft = getCurrentDraft();
+    if (draft.releasedStrokeCount && board.line?.length) {
+      activePaper.drafts[characterIndex] = { strokes: draft.strokes };
+    }
     releaseStroke(board);
     saveCurrentDraft();
     updateEditorControls();
@@ -819,12 +826,54 @@
   }
   getElement('search').oninput = renderHome;
   getElement('site-info').onclick = () => getElement('site-info-dialog').showModal();
+  const progressDialog = getElement('progress-dialog');
+  const progressGrid = getElement('progress-grid');
+  const releaseInkButton = getElement('release-uploaded-ink');
+  const releaseInkStatus = getElement('release-ink-status');
+
   getElement('view-progress').onclick = () => {
-    getElement('progress-grid').replaceChildren();
+    finishAllStrokes();
+    releaseInkStatus.textContent = '';
+    releaseInkStatus.classList.remove('error');
+    progressGrid.replaceChildren();
     for (let i = 0; i < activePaper.chars.length; i++) {
-      getElement('progress-grid').append(createCharacterButton(i));
+      progressGrid.append(createCharacterButton(i));
     }
-    getElement('progress-dialog').showModal();
+    progressDialog.showModal();
+  };
+
+  const closeProgressButton = progressDialog.querySelector('[data-close]');
+  progressDialog.addEventListener('cancel', event => {
+    if (releaseInkButton.disabled) {
+      event.preventDefault();
+    }
+  });
+
+  releaseInkButton.onclick = async () => {
+    if (!confirm('清除這份稿紙中硬筆和毛筆都已上傳的本機筆跡？之後請到 GitHub 下載 SVG，上傳進度會保留。')) {
+      return;
+    }
+    const paper = activePaper;
+    releaseInkButton.disabled = closeProgressButton.disabled = progressGrid.inert = true;
+    releaseInkStatus.classList.remove('error');
+    releaseInkStatus.textContent = '正在釋放本機筆跡…';
+    try {
+      const released = await PaperStore.releaseUploadedStrokes(paper.id, getUploadDestination());
+      for (const [index, draft] of released) {
+        paper.drafts[index] = draft;
+        updateCharacterButton(progressGrid.children[index], index);
+      }
+      renderEditor();
+      releaseInkStatus.textContent = released.length
+        ? `已釋放 ${released.length} 字的本機筆跡。`
+        : '沒有可釋放的筆跡。';
+    } catch (error) {
+      releaseInkStatus.textContent = error.message;
+      releaseInkStatus.classList.add('error');
+    } finally {
+      releaseInkButton.disabled = closeProgressButton.disabled = progressGrid.inert = false;
+      releaseInkButton.focus();
+    }
   };
 
   function downloadBoard(board) {
@@ -909,6 +958,28 @@
     getElement('paper-dialog').showModal();
   }
   getElement('add-paper').onclick = () => showPaperDialog();
+  const restoreBuiltInButton = getElement('restore-built-in-papers');
+  restoreBuiltInButton.onclick = async () => {
+    const addPaperButton = getElement('add-paper');
+    const status = getElement('restore-papers-status');
+    restoreBuiltInButton.disabled = addPaperButton.disabled = true;
+    status.textContent = '';
+    status.classList.remove('error');
+    try {
+      const added = await PaperStore.restoreBuiltInPapers();
+      if (added.length) {
+        papers.push(...added);
+        getElement('search').value = '';
+        renderHome();
+      }
+      status.textContent = added.length ? `已載入 ${added.length} 份預設稿紙。` : '沒有可補回的預設稿紙。';
+    } catch (error) {
+      status.textContent = error.message;
+      status.classList.add('error');
+    } finally {
+      restoreBuiltInButton.disabled = addPaperButton.disabled = false;
+    }
+  };
   getElement('paper-form').onsubmit = async e => {
     e.preventDefault();
     try {
@@ -1178,6 +1249,7 @@
         }
       } catch { }
       setGithub(githubSettings);
+      restoreBuiltInButton.disabled = getElement('add-paper').disabled = false;
       document.fonts.load(guideFont('regular')).then(drawGuides).catch(() => { });
       document.fonts.load(guideFont('rough')).then(faces => {
         shoujinFontLoaded = faces.length > 0 && faces.every(face => face.status === 'loaded');
@@ -1185,7 +1257,6 @@
       }).catch(() => { });
     } catch (error) {
       showMessage(error.message || '初始化失敗，請重新整理。', true);
-      getElement('add-paper').disabled = true;
     }
   }
   init();

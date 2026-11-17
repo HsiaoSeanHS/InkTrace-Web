@@ -83,11 +83,16 @@
   }
 
   async function init() {
-    const builtIns = prepareBuiltInPapers();
     const isLocalPreview = ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
-    const stores = isLocalPreview ? ['papers', 'meta', 'drafts'] : ['papers', 'meta'];
     await openDatabase();
-    await runTransaction(stores, 'readwrite', transaction => {
+    await installBuiltInPapers({ restoreMissing: isLocalPreview, refreshUnused: isLocalPreview });
+  }
+
+  function installBuiltInPapers({ restoreMissing, refreshUnused = false }) {
+    const builtIns = prepareBuiltInPapers();
+    const stores = refreshUnused ? ['papers', 'meta', 'drafts'] : ['papers', 'meta'];
+    const added = [];
+    return runTransaction(stores, 'readwrite', transaction => {
       const meta = transaction.objectStore('meta');
       const existing = transaction.objectStore('papers').getAll();
       existing.onsuccess = () => {
@@ -96,14 +101,15 @@
         for (const paper of builtIns) {
           const installed = meta.get(paper.id);
           installed.onsuccess = () => {
-            if (installed.result && !isLocalPreview) {
+            if (installed.result && !restoreMissing) {
               return;
             }
             const saved = papersById.get(paper.id);
             if (!saved && !titles.has(paper.title)) {
               putPaperRecord(transaction, paper);
+              added.push(paper);
             }
-            if (isLocalPreview && saved?.title === paper.title &&
+            if (refreshUnused && saved?.title === paper.title &&
               (saved.chars.length !== paper.chars.length || saved.chars.some((char, i) => char !== paper.chars[i]))) {
               const drafts = transaction.objectStore('drafts').count(draftRange(paper.id));
               drafts.onsuccess = () => {
@@ -118,6 +124,7 @@
           };
         }
       };
+      return () => added;
     });
   }
 
@@ -151,9 +158,43 @@
     });
   }
 
+  function releaseUploadedStrokes(paperId, destination) {
+    return runTransaction(['papers', 'drafts'], 'readwrite', transaction => {
+      const released = [];
+      const paperRequest = transaction.objectStore('papers').get(paperId);
+      paperRequest.onsuccess = () => {
+        const paper = paperRequest.result;
+        if (!paper) {
+          return;
+        }
+
+        const request = transaction.objectStore('drafts').openCursor(draftRange(paperId));
+        request.onsuccess = () => {
+          const cursor = request.result;
+          if (!cursor) {
+            return;
+          }
+
+          const record = cursor.value;
+          const index = record.characterIndex;
+          paper.drafts = { [index]: record.draft };
+          const draft = InkTrace.releaseUploadedDraft(paper, index, destination);
+          if (draft) {
+            cursor.update({ ...record, draft });
+            released.push([index, draft]);
+          }
+          cursor.continue();
+        };
+      };
+      return () => released;
+    });
+  }
+
   window.PaperStore = {
     init,
+    restoreBuiltInPapers: () => installBuiltInPapers({ restoreMissing: true }),
     all,
+    releaseUploadedStrokes,
     put: paper => runTransaction('papers', 'readwrite', transaction => {
       putPaperRecord(transaction, paper);
     }),

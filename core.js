@@ -87,9 +87,12 @@
     const fields = boardFields[side];
     const upload = draft?.[fields.upload];
     if (!upload || upload.svgFormat !== SVG_FORMAT ||
-      upload.signature !== signature(draft[fields.strokes]) ||
-      upload.title !== p.title || upload.destination !== destination ||
-      (side === 'rough' && !hasMatchingStrokeCounts(draft))) {
+      upload.title !== p.title || upload.destination !== destination) {
+      return false;
+    }
+    const released = Number.isInteger(draft.releasedStrokeCount) && draft.releasedStrokeCount > 0;
+    if (!released && (upload.signature !== signature(draft[fields.strokes]) ||
+      (side === 'rough' && !hasMatchingStrokeCounts(draft)))) {
       return false;
     }
     const files = filesFor(p.chars);
@@ -105,6 +108,21 @@
 
   function count(p, dest) {
     return p.chars.reduce((n, _, i) => n + Number(pairDone(p, i, dest)), 0);
+  }
+
+  function releaseUploadedDraft(paper, index, destination) {
+    const draft = paper.drafts[index];
+    if (!draft || draft.releasedStrokeCount || !pairDone(paper, index, destination)) {
+      return null;
+    }
+
+    const { signature: regularSignature, ...uploaded } = draft.uploaded;
+    const { signature: roughSignature, ...roughUploaded } = draft.roughUploaded;
+    return {
+      releasedStrokeCount: strokeCount(draft.strokes),
+      uploaded,
+      roughUploaded,
+    };
   }
 
   function insideCanvas(point) {
@@ -359,6 +377,7 @@
     done,
     pairDone,
     count,
+    releaseUploadedDraft,
     strokeCount,
     hasMatchingStrokeCounts,
     boardFields,

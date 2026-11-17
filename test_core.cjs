@@ -28,6 +28,21 @@ p.drafts[0].roughUploaded = {
 assert.equal(C.count(p, 'owner/repo@main'), 1);
 assert.equal(C.count(p, 'other/repo@main'), 0);
 
+const releasedDraft = C.releaseUploadedDraft(p, 0, 'owner/repo@main');
+assert.equal(releasedDraft.releasedStrokeCount, 1);
+assert.equal(releasedDraft.strokes, undefined);
+assert.equal(releasedDraft.roughStrokes, undefined);
+assert.equal(releasedDraft.uploaded.signature, undefined);
+assert.equal(releasedDraft.roughUploaded.signature, undefined);
+const releasedPaper = { ...p, drafts: { 0: releasedDraft } };
+assert.equal(C.count(releasedPaper, 'owner/repo@main'), 1);
+assert.equal(C.count(releasedPaper, 'other/repo@main'), 0);
+assert.equal(C.count({ ...releasedPaper, title: '改名' }, 'owner/repo@main'), 0);
+assert.equal(C.releaseUploadedDraft(releasedPaper, 0, 'owner/repo@main'), null);
+const partialPaper = { ...p, drafts: { 0: { strokes, uploaded: p.drafts[0].uploaded } } };
+assert.equal(C.releaseUploadedDraft(partialPaper, 0, 'owner/repo@main'), null);
+assert.equal(C.characters('天'.repeat(2000)).length, 2000);
+
 assert.equal(C.strokeCount([[], ...strokes]), 1, 'only nonempty strokes count');
 assert.equal(C.hasMatchingStrokeCounts({ strokes: [], roughStrokes: [] }), false);
 assert.equal(C.hasMatchingStrokeCounts(p.drafts[0]), true);
@@ -43,6 +58,7 @@ const mismatchedPaper = { ...p, drafts: { 0: mismatchedDraft } };
 assert.equal(C.done(mismatchedPaper, 0, 'owner/repo@main', 'regular'), true);
 assert.equal(C.done(mismatchedPaper, 0, 'owner/repo@main', 'rough'), false);
 assert.equal(C.count(mismatchedPaper, 'owner/repo@main'), 0, 'legacy mismatched uploads are incomplete');
+assert.equal(C.releaseUploadedDraft(mismatchedPaper, 0, 'owner/repo@main'), null);
 
 const repeatedPaper = { title: '重複字', chars: ['天', '地', '天', '天', '?', '?'], drafts: {} };
 assert.deepEqual(repeatedPaper.chars.map((_, index) => C.filenameAt(repeatedPaper, index)), [

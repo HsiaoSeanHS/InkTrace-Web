@@ -232,7 +232,7 @@ main {
 .page-heading {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  grid-template-areas: "title references add";
+  grid-template-areas: "title references actions";
   align-items: center;
   gap: 8px 14px;
   margin: 6px 0 22px;
@@ -242,8 +242,15 @@ main {
   grid-area: title;
 }
 
-#add-paper {
-  grid-area: add;
+.paper-actions {
+  grid-area: actions;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.paper-actions .button {
   white-space: nowrap;
 }
 
@@ -263,9 +270,9 @@ main {
 
 @media (max-width: 540px) {
   .page-heading {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr);
     grid-template-areas:
-      "title add"
+      "title actions"
       "references references";
   }
 }
@@ -462,8 +469,6 @@ progress::-moz-progress-bar {
 }
 
 .char.selected {
-  background: var(--surface);
-  color: var(--muted);
   border: 2px solid var(--blue);
 }
 

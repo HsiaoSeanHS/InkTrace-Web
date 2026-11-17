@@ -52,7 +52,10 @@
             <a class="button outline" href="https://buttaiwan.github.io/writemyfont/"
               target="_blank" rel="noopener noreferrer">But Ko ↗</a>
           </div>
-          <button id="add-paper" class="button primary">＋ 新增稿紙</button>
+          <div class="paper-actions">
+            <button id="restore-built-in-papers" type="button" class="button outline" disabled>載入預設稿紙</button>
+            <button id="add-paper" class="button primary" disabled>＋ 新增稿紙</button>
+          </div>
         </div>
         <label class="search-label">
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -61,6 +64,7 @@
           </svg>
           <input id="search" placeholder="搜尋稿紙" aria-label="搜尋稿紙">
         </label>
+        <p id="restore-papers-status" class="message" role="status"></p>
         <div id="papers" class="papers">
         </div>
         <p id="empty" class="empty" hidden>尚無稿紙</p>
@@ -259,6 +263,8 @@
         <button type="button" class="close" data-close="progress-dialog" aria-label="關閉">×</button>
       </div>
       <p class="hint">藍框：目前字元 · 黃色：已上傳一種 · 綠色：兩種都已上傳 · 圓點：有草稿</p>
+      <button id="release-uploaded-ink" type="button" class="button outline">釋放本機筆跡</button>
+      <p id="release-ink-status" class="form-message" role="status"></p>
       <div id="progress-grid" class="progress-grid">
       </div>
     </dialog>
