@@ -9,13 +9,16 @@
   const GUIDE_FONT_SIZE = 650;
   const GUIDE_BASELINE = 0.75;
   // Measure H, x, the tallest ascender and the deepest descender in each bundled font.
-  const LATIN_GUIDE_POSITIONS = {
-    regular: { ascender: 22.5, 'cap-height': 27.8, 'x-height': 40.7, descender: 91.7 },
-    rough: { ascender: 31, 'cap-height': 32.5, 'x-height': 46, descender: 94.9 },
-  };
+  // Source: tools/measure_latin_guides.py (Pillow ink bounds, calibrated 2026-11-17).
+  // Original measurements remain in tools/latin-guide-measurements.json.
+  // Shared Latin guides and font sizes for all prompts: tools/measure_shared_latin_guides.py.
+  // At 650 px, x rises 343 px in Noto and 290 px in Shoujin above the baseline.
+  const REGULAR_GUIDE_FONT_SIZE = GUIDE_FONT_SIZE * 290 / 343;
+  const LATIN_GUIDE_POSITIONS = { ascender: 31, 'cap-height': 32.5, 'x-height': 46, descender: 94.9 };
 
   function guideFont(side) {
-    return side === 'regular' ? `100 ${GUIDE_FONT_SIZE}px InkTraceGuide` : `400 ${GUIDE_FONT_SIZE}px InkTraceShoujin`;
+    const fontSize = side === 'regular' ? REGULAR_GUIDE_FONT_SIZE : GUIDE_FONT_SIZE;
+    return side === 'regular' ? `100 ${fontSize}px InkTraceGuide` : `400 ${fontSize}px InkTraceShoujin`;
   }
 
   const boards = Array.from(document.querySelectorAll('[data-board]'), element => {
@@ -24,7 +27,7 @@
     const guide = element.querySelector('.guide-canvas');
     const paper = element.querySelector('.paper');
     paper.style.setProperty('--guide-baseline', `${GUIDE_BASELINE * 100}%`);
-    for (const [line, position] of Object.entries(LATIN_GUIDE_POSITIONS[side])) {
+    for (const [line, position] of Object.entries(LATIN_GUIDE_POSITIONS)) {
       paper.style.setProperty(`--guide-${line}`, `${position}%`);
     }
     return {
@@ -1054,13 +1057,6 @@
     }
     getElement('connection-dot').classList.toggle('connected', githubSettings.configured);
     getElement('connection-dot').setAttribute('aria-label', githubSettings.configured ? '已設定' : '尚未設定');
-    try {
-      if (githubSettings.owner) {
-        localStorage.setItem('inktrace-github', JSON.stringify({ owner: githubSettings.owner, repo: githubSettings.repo }));
-      } else {
-        localStorage.removeItem('inktrace-github');
-      }
-    } catch (_) { }
     renderHome();
     if (activePaper) {
       clearUploadErrors();
@@ -1068,11 +1064,19 @@
     }
   }
 
+  function updateTokenStorageStatus() {
+    getElement('token').placeholder = githubSettings.configured ? '已設定，留空沿用；輸入新 Token 可替換' : 'github_pat_…';
+    getElement('token-storage-status').textContent = githubSettings.configured
+      ? (githubSettings.rememberToken ? 'Token 已記住，可在此瀏覽器重新開啟網頁後繼續使用。' : 'Token 已設定，目前僅供這個分頁使用。')
+      : '尚未設定 Token。';
+  }
+
   function showSettings() {
     getElement('owner').value = githubSettings.owner;
     getElement('repo').value = githubSettings.repo;
     getElement('token').value = '';
-    getElement('token').placeholder = githubSettings.configured ? '重新設定時請填入 Token' : 'github_pat_…';
+    getElement('remember-token').checked = Boolean(githubSettings.rememberToken);
+    updateTokenStorageStatus();
     showSettingsMessage('');
     getElement('settings-dialog').showModal();
   }
@@ -1101,16 +1105,30 @@
     };
   }
   getElement('settings-form').onsubmit = runSettingsAction(async () => {
-    const result = InkTraceGitHub.configure(getElement('owner').value.trim(), getElement('repo').value.trim(), getElement('token').value.trim());
+    const token = getElement('token').value.trim() || githubSettings.token || '';
+    const result = InkTraceGitHub.configure(getElement('owner').value.trim(), getElement('repo').value.trim(), token);
+    result.rememberToken = getElement('remember-token').checked;
+    const saved = { owner: result.owner, repo: result.repo };
+    if (result.rememberToken) {
+      saved.token = result.token;
+      saved.rememberToken = true;
+    }
+    try {
+      localStorage.setItem('inktrace-github', JSON.stringify(saved));
+    } catch {
+      throw Error('無法儲存 GitHub 設定，請確認瀏覽器允許儲存網站資料。');
+    }
     getElement('token').value = '';
     setGithub(result);
+    updateTokenStorageStatus();
     showSettingsMessage('已儲存，請測試連線。');
   });
   getElement('check').onclick = runSettingsAction(async () => {
     if (
       getElement('owner').value.trim() !== githubSettings.owner ||
       getElement('repo').value.trim() !== githubSettings.repo ||
-      getElement('token').value
+      getElement('token').value ||
+      getElement('remember-token').checked !== Boolean(githubSettings.rememberToken)
     ) {
       throw Error('請先儲存設定，再測試連線。');
     }
@@ -1119,8 +1137,15 @@
     showSettingsMessage('連線成功 · main');
   });
   getElement('clear-settings').onclick = runSettingsAction(async () => {
+    try {
+      localStorage.removeItem('inktrace-github');
+    } catch {
+      throw Error('無法清除已儲存的設定，請確認瀏覽器允許存取網站資料。');
+    }
     setGithub({ configured: false, owner: '', repo: '' });
     getElement('owner').value = getElement('repo').value = getElement('token').value = '';
+    getElement('remember-token').checked = false;
+    updateTokenStorageStatus();
     showSettingsMessage('已清除。');
   });
   getElement('settings-dialog').addEventListener('close', () => {
@@ -1246,6 +1271,9 @@
         if (cached && typeof cached.owner === 'string' && typeof cached.repo === 'string') {
           githubSettings.owner = cached.owner;
           githubSettings.repo = cached.repo;
+          if (cached.rememberToken === true && typeof cached.token === 'string') {
+            githubSettings = { ...InkTraceGitHub.configure(cached.owner, cached.repo, cached.token), rememberToken: true };
+          }
         }
       } catch { }
       setGithub(githubSettings);

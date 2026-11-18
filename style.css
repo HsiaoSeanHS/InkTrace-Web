@@ -701,6 +701,11 @@ form > label {
   margin: 18px 0;
 }
 
+form > .remember-token-option {
+  flex-direction: row;
+  align-items: center;
+}
+
 textarea {
   resize: vertical;
   width: 100%;
