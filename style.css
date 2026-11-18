@@ -516,6 +516,40 @@ progress::-moz-progress-bar {
   border-top: 1px dashed #dedede;
 }
 
+.board[data-board="rough"] .paper::before,
+.board[data-board="rough"] .paper::after {
+  display: none;
+}
+
+.reference-frame {
+  position: absolute;
+  left: calc(100% / 3);
+  top: calc(100% / 3);
+  width: calc(100% / 3);
+  height: calc(100% / 3);
+  outline: 1px solid #c6c6c6;
+  pointer-events: none;
+}
+
+.paper:not([data-latin-letter]) .reference-frame::before,
+.paper:not([data-latin-letter]) .reference-frame::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.paper:not([data-latin-letter]) .reference-frame::before {
+  height: 100%;
+  left: 50%;
+  border-left: 1px dashed #dedede;
+}
+
+.paper:not([data-latin-letter]) .reference-frame::after {
+  width: 100%;
+  top: 50%;
+  border-top: 1px dashed #dedede;
+}
+
 .paper canvas {
   display: block;
   width: 100%;
@@ -1195,6 +1229,19 @@ body.writing-mode {
   width: 100%;
   max-height: 100%;
   border-radius: 0;
+}
+
+.writing-viewport {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.canvas-pan-controls {
+  display: none;
 }
 
 .editor-controls {
@@ -1886,5 +1933,81 @@ body.writing-mode {
 @media (max-width: 420px) {
   .board-lock {
     font-size: 11px;
+  }
+}
+
+/* Keep the central frame usable on phones and navigate the extended brush area. */
+@media (max-width: 699px), (max-height: 520px) and (max-width: 1000px) {
+  body.writing-mode {
+    height: auto;
+    min-height: 100dvh;
+  }
+
+  .writing-mode main,
+  .writing-mode #editor {
+    flex: 0 0 auto;
+  }
+
+  .writing-mode #editor,
+  .writing-mode .writing-card,
+  .writing-mode .canvas-area,
+  .writing-mode .board-grid,
+  .writing-mode .board,
+  .writing-mode .canvas-slot {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+  }
+
+  .writing-mode .canvas-area,
+  .writing-mode .editor-controls {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .writing-mode .board-grid {
+    gap: 24px;
+  }
+
+  .writing-mode .canvas-slot {
+    gap: 8px;
+  }
+
+  .writing-mode .writing-viewport {
+    height: auto;
+  }
+
+  .writing-mode .board[data-board="rough"] .writing-viewport {
+    display: block;
+    aspect-ratio: 1;
+    overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+
+  .writing-mode .board[data-board="rough"] .paper {
+    max-height: none;
+  }
+
+  .canvas-pan-controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+    gap: 12px;
+  }
+
+  .canvas-pan-controls label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .canvas-pan-controls input {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    margin: 0;
+    touch-action: pan-y;
   }
 }

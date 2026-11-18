@@ -118,4 +118,24 @@ const edgePoints = [...edgePath.matchAll(/[ML] ([\d.]+) ([\d.]+)/g)].map(([, x, 
 assert(edgePoints.some(([x]) => x === 300), 'a departing stroke reaches the frame edge');
 assert(edgePoints.every(([x, y]) => x >= 0 && x <= 300 && y >= 0 && y <= 300));
 assert(!edgePoints.some(([, y]) => y > 50 && y < 110), 'there is no line bridging the off-canvas excursion');
+
+const overflowStroke = [point(20, 20), point(-80, 60), point(-120, 100), point(450, 430)];
+const overflowSvg = C.svg([overflowStroke], { clipToFrame: false });
+assert.match(overflowSvg, /viewBox="0 0 300 300"/);
+assert.match(overflowSvg, /overflow="visible"/);
+const overflowPoints = [...overflowSvg.matchAll(/[ML] (-?[\d.]+) (-?[\d.]+)/g)]
+  .map(([, x, y]) => [Number(x), Number(y)]);
+assert(overflowPoints.some(([x]) => x < 0), 'brush export preserves left overflow');
+assert(overflowPoints.some(([x, y]) => x > 300 && y > 300), 'brush export preserves right and bottom overflow');
+assert.equal((overflowSvg.match(/<path /g) ?? []).length, 1, 'one brush stroke remains one exported path');
+const outsideDot = [[point(450, 450)]];
+assert.throws(() => C.svg(outsideDot), /請先寫字/);
+assert.match(C.svg(outsideDot, { clipToFrame: false }), /<path /, 'brush export retains a stroke outside the frame');
+const expandedSvg = C.svg([overflowStroke], { clipToFrame: false, framePadding: 1 });
+assert.match(expandedSvg, /viewBox="-300 -300 900 900" width="900" height="900"/);
+assert.equal(
+  expandedSvg.match(/<path d="([^"]+)"/)[1],
+  overflowSvg.match(/<path d="([^"]+)"/)[1],
+  'expanding the brush frame preserves the original coordinates and scale',
+);
 console.log('PASS: prompt import, duplicate characters, pressure, upload completion and frame-preserving SVG clipping.');

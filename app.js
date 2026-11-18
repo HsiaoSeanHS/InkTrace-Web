@@ -26,6 +26,50 @@
     const canvas = element.querySelector('.writing-canvas');
     const guide = element.querySelector('.guide-canvas');
     const paper = element.querySelector('.paper');
+    const viewport = document.createElement('div');
+    viewport.className = 'writing-viewport';
+    paper.before(viewport);
+    viewport.append(paper);
+    const panInputs = [];
+    if (side === 'rough') {
+      const referenceFrame = document.createElement('div');
+      referenceFrame.className = 'reference-frame';
+      referenceFrame.append(guide, ...paper.querySelectorAll('.writing-baseline, .writing-latin-guides'));
+      paper.prepend(referenceFrame);
+      const controls = document.createElement('div');
+      controls.className = 'canvas-pan-controls';
+      for (const [axis, text] of [['x', '左右移動'], ['y', '上下移動']]) {
+        const label = document.createElement('label');
+        label.textContent = text;
+        const input = document.createElement('input');
+        input.type = 'range';
+        input.min = '0';
+        input.max = '100';
+        input.value = '50';
+        input.dataset.axis = axis;
+        input.oninput = () => {
+          if (isDrawing()) {
+            return;
+          }
+          const distance = axis === 'x' ? viewport.scrollWidth - viewport.clientWidth : viewport.scrollHeight - viewport.clientHeight;
+          viewport[axis === 'x' ? 'scrollLeft' : 'scrollTop'] = distance * input.valueAsNumber / 100;
+        };
+        label.append(input);
+        controls.append(label);
+        panInputs.push(input);
+      }
+      viewport.before(controls);
+      viewport.addEventListener('scroll', () => {
+        for (const input of panInputs) {
+          const horizontal = input.dataset.axis === 'x';
+          const distance = horizontal ? viewport.scrollWidth - viewport.clientWidth : viewport.scrollHeight - viewport.clientHeight;
+          const position = horizontal ? viewport.scrollLeft : viewport.scrollTop;
+          if (distance > 0) {
+            input.value = String(position / distance * 100);
+          }
+        }
+      });
+    }
     paper.style.setProperty('--guide-baseline', `${GUIDE_BASELINE * 100}%`);
     for (const [line, position] of Object.entries(LATIN_GUIDE_POSITIONS)) {
       paper.style.setProperty(`--guide-${line}`, `${position}%`);
@@ -41,6 +85,8 @@
       slot: element.querySelector('.canvas-slot'),
       info: element.querySelector('.board-info'),
       paper,
+      viewport,
+      panInputs,
       buttons: Array.from(element.querySelectorAll('[data-action]')),
       element,
       progress: element.querySelector('progress'),
@@ -343,8 +389,10 @@
   function drawStrokes(board) {
     const { ctx } = board;
     const scale = GUIDE_SIZE / inkTrace.canvasSize;
-    ctx.setTransform(scale, 0, 0, scale, 0, 0);
-    ctx.clearRect(0, 0, inkTrace.canvasSize, inkTrace.canvasSize);
+    const offset = board.side === 'rough' ? GUIDE_SIZE : 0;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, board.canvas.width, board.canvas.height);
+    ctx.setTransform(scale, 0, 0, scale, offset, offset);
     ctx.fillStyle = ctx.strokeStyle = '#111';
     ctx.lineCap = ctx.lineJoin = 'round';
     for (const line of getBoardStrokes(board)) {
@@ -434,6 +482,8 @@
 
   function readPointerPoint(board, event, release = false) {
     const rect = board.strokeRect;
+    const frameCount = board.side === 'rough' ? 3 : 1;
+    const offset = board.side === 'rough' ? inkTrace.canvasSize : 0;
     const previous = board.lastPointerPoint;
     const width = release && previous ? previous.width : inkTrace.width(
       Number(getElement('width').value),
@@ -443,8 +493,8 @@
       Number(getElement('pressure').value) / 100,
     );
     return {
-      x: (event.clientX - rect.left) / rect.width * inkTrace.canvasSize,
-      y: (event.clientY - rect.top) / rect.height * inkTrace.canvasSize,
+      x: (event.clientX - rect.left) / rect.width * inkTrace.canvasSize * frameCount - offset,
+      y: (event.clientY - rect.top) / rect.height * inkTrace.canvasSize * frameCount - offset,
       width,
     };
   }
@@ -524,7 +574,7 @@
     board.drawnPoints = 0;
     board.line = [];
     board.lastPointerPoint = readPointerPoint(board, event);
-    if (inkTrace.insideCanvas(board.lastPointerPoint)) {
+    if (board.side === 'rough' || inkTrace.insideCanvas(board.lastPointerPoint)) {
       recordStrokePoint(board, board.lastPointerPoint);
     }
     drawPendingSamples(board);
@@ -546,6 +596,13 @@
     const previous = board.lastPointerPoint;
     const next = readPointerPoint(board, sample, release);
     board.lastPointerPoint = next;
+    if (board.side === 'rough') {
+      const last = board.line.at(-1);
+      if (!last || Math.hypot(next.x - last.x, next.y - last.y) >= MIN_SAMPLE_DISTANCE) {
+        recordStrokePoint(board, next);
+      }
+      return;
+    }
     const previousInside = inkTrace.insideCanvas(previous);
     const nextInside = inkTrace.insideCanvas(next);
     if (!previousInside || !nextInside) {
@@ -884,7 +941,9 @@
     if (!strokes.length) {
       return;
     }
-    const svg = new Blob([inkTrace.svg(strokes)], { type: 'image/svg+xml;charset=utf-8' });
+    const svg = new Blob([inkTrace.svg(strokes, {
+      clipToFrame: board.side !== 'rough', framePadding: board.side === 'rough' ? 1 : 0,
+    })], { type: 'image/svg+xml;charset=utf-8' });
     const url = URL.createObjectURL(svg);
     const link = document.createElement('a');
     link.href = url;
@@ -925,7 +984,9 @@
         activePaper.title,
         activePaper.chars[characterIndex],
         board.side,
-        inkTrace.svg(ink),
+        inkTrace.svg(ink, {
+          clipToFrame: board.side !== 'rough', framePadding: board.side === 'rough' ? 1 : 0,
+        }),
         filename,
       );
       getCurrentDraft()[board.fields.upload] = {
@@ -1181,24 +1242,34 @@
       if (!activePaper || isDrawing()) {
         return;
       }
-      const availableSize = Math.floor(Math.min(maxCanvasSize, ...boards.flatMap(board => {
+      const mobile = window.matchMedia('(max-width: 699px), (max-height: 520px) and (max-width: 1000px)').matches;
+      const sizes = boards.map(board => {
         const rect = board.slot.getBoundingClientRect();
-        return [rect.width, rect.height - board.info.getBoundingClientRect().height];
-      })));
-      if (availableSize <= 0) {
+        const frameCount = board.side === 'rough' ? 3 : 1;
+        const availableSize = Math.floor(Math.min(maxCanvasSize, mobile ? rect.width : Math.min(
+          rect.width / frameCount, (rect.height - board.info.getBoundingClientRect().height) / frameCount,
+        )));
+        const minimum = Math.min(mobile ? Math.max(160, minCanvasSize) : minCanvasSize, availableSize);
+        const side = Math.max(minimum, Math.min(preferredCanvasSize, availableSize));
+        return { board, availableSize, minimum, side, frameCount };
+      });
+      if (sizes.some(size => size.availableSize <= 0)) {
         return;
       }
-      const minimum = Math.min(minCanvasSize, availableSize);
-      const side = Math.min(preferredCanvasSize, availableSize);
+      const { minimum, availableSize, side } = sizes[0];
       canvasSizeInput.min = String(minimum);
       canvasSizeInput.max = String(availableSize);
       canvasSizeInput.value = String(side);
       canvasSizeInput.disabled = minimum === availableSize;
       canvasSizeInput.setAttribute('aria-valuetext', `${side} 像素`);
       canvasSizeOutput.value = `${side} px`;
-      for (const board of boards) {
-        board.paper.style.width = side + 'px';
-        board.paper.style.height = side + 'px';
+      for (const { board, side, frameCount } of sizes) {
+        board.paper.style.width = side * frameCount + 'px';
+        board.paper.style.height = side * frameCount + 'px';
+        if (mobile && board.side === 'rough') {
+          board.viewport.scrollLeft = (board.viewport.scrollWidth - board.viewport.clientWidth) * board.panInputs[0].valueAsNumber / 100;
+          board.viewport.scrollTop = (board.viewport.scrollHeight - board.viewport.clientHeight) * board.panInputs[1].valueAsNumber / 100;
+        }
       }
     });
   }

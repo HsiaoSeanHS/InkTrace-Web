@@ -318,9 +318,10 @@
     return contour;
   }
 
-  function svg(strokes) {
+  function svg(strokes, { clipToFrame = true, framePadding = 0 } = {}) {
     const outlines = strokes.filter(stroke => stroke.length).map(stroke =>
-      contoursForStroke(stroke).map(clipContour).filter(contour => contour.length >= 3)
+      contoursForStroke(stroke).map(contour => clipToFrame ? clipContour(contour) : contour)
+        .filter(contour => contour.length >= 3)
     ).filter(contours => contours.length);
     if (!outlines.length) {
       throw Error('請先寫字。');
@@ -328,8 +329,12 @@
 
     const scale = SVG_SIZE / CANVAS_SIZE;
     const format = value => Number(value.toFixed(5));
+    // Preserve the common coordinate frame for pairing, including paths outside it.
+    const overflow = clipToFrame ? '' : ' overflow="visible"';
+    const padding = framePadding * SVG_SIZE;
+    const size = SVG_SIZE + 2 * padding;
     const elements = [
-      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${SVG_SIZE} ${SVG_SIZE}" width="${SVG_SIZE}" height="${SVG_SIZE}">`,
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-padding} ${-padding} ${size} ${size}" width="${size}" height="${size}"${overflow}>`,
     ];
     for (const contours of outlines) {
       const path = contours.map(contour => {
