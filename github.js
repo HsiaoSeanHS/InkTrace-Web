@@ -1,7 +1,13 @@
 (function (root) {
   'use strict';
 
+  const repository = Object.freeze({ owner: 'HsiaoSeanHS', repo: 'InkTrace-Web', branch: 'main' });
+  const backupPath = '/contents/backups/latest.json';
+
   function configure(owner, repo, token) {
+    if (owner !== repository.owner || repo !== repository.repo) {
+      throw Error('個人版僅使用 HsiaoSeanHS/InkTrace-Web。');
+    }
     if (!/^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/.test(owner)) {
       throw Error('GitHub 帳號名稱格式不正確。');
     }
@@ -19,11 +25,11 @@
     };
   }
 
-  async function request(config, path, body) {
+  async function request(config, path, body, raw = false) {
     if (!config.configured) {
       throw Error('請先設定 GitHub。');
     }
-    const headers = { Authorization: `Bearer ${config.token}`, Accept: 'application/vnd.github+json' };
+    const headers = { Authorization: `Bearer ${config.token}`, Accept: raw ? 'application/vnd.github.raw+json' : 'application/vnd.github+json' };
     if (body) {
       headers['Content-Type'] = 'application/json';
     }
@@ -39,7 +45,7 @@
         signal: controller.signal,
       });
       if (response.ok) {
-        return await response.json();
+        return raw ? await response.text() : await response.json();
       }
       const messages = {
         401: 'Token 無效或已過期。',
@@ -103,5 +109,30 @@
     return { sha: result.content.sha, url: `https://github.com/${config.owner}/${config.repo}/blob/main/${path}` };
   }
 
-  root.InkTraceGitHub = { configure, check, upload };
+  async function backup(config, data) {
+    let sha;
+    try {
+      const existing = await request(config, `${backupPath}?ref=main`);
+      if (existing.type !== 'file' || !existing.sha) throw Error('備份路徑不是一般檔案。');
+      sha = existing.sha;
+    } catch (error) {
+      if (error.status !== 404) throw error;
+    }
+    const bytes = new TextEncoder().encode(JSON.stringify(data));
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += 8192) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+    }
+    const result = await request(config, backupPath, {
+      message: `Backup InkTrace personal data (${data.createdAt})`,
+      content: btoa(binary), branch: 'main', ...(sha ? { sha } : {}),
+    });
+    if (!result.content?.sha) throw Error('GitHub 未確認備份，請到倉庫檢查。');
+  }
+
+  async function restore(config) {
+    return request(config, `${backupPath}?ref=main`, undefined, true);
+  }
+
+  root.InkTraceGitHub = { repository, configure, check, upload, backup, restore };
 })(globalThis);

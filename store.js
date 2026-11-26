@@ -83,9 +83,8 @@
   }
 
   async function init() {
-    const isLocalPreview = ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
     await openDatabase();
-    await installBuiltInPapers({ restoreMissing: isLocalPreview, refreshUnused: isLocalPreview });
+    await installBuiltInPapers({ restoreMissing: false });
   }
 
   function installBuiltInPapers({ restoreMissing, refreshUnused = false }) {
@@ -195,6 +194,38 @@
     restoreBuiltInPapers: () => installBuiltInPapers({ restoreMissing: true }),
     all,
     releaseUploadedStrokes,
+    replaceAll: backup => {
+      const restored = InkTraceBackup.validate(backup).papers;
+      return runTransaction(['papers', 'drafts', 'meta'], 'readwrite', transaction => {
+        const oldPapers = transaction.objectStore('papers').getAll();
+        const oldDrafts = transaction.objectStore('drafts').getAll();
+        oldDrafts.onsuccess = () => {
+          transaction.objectStore('meta').put({ papers: oldPapers.result, drafts: oldDrafts.result }, 'before-restore');
+        };
+        transaction.objectStore('papers').clear();
+        transaction.objectStore('drafts').clear();
+        for (const paper of restored) {
+          putPaperRecord(transaction, paper);
+          for (const [index, draft] of Object.entries(paper.drafts)) {
+            transaction.objectStore('drafts').put({ paperId: paper.id, characterIndex: Number(index), draft });
+          }
+        }
+      });
+    },
+    undoRestore: () => runTransaction(['papers', 'drafts', 'meta'], 'readwrite', transaction => {
+      let found = false;
+      const request = transaction.objectStore('meta').get('before-restore');
+      request.onsuccess = () => {
+        if (!request.result) return;
+        found = true;
+        transaction.objectStore('papers').clear();
+        transaction.objectStore('drafts').clear();
+        for (const paper of request.result.papers) putPaperRecord(transaction, paper);
+        for (const draft of request.result.drafts) transaction.objectStore('drafts').put(draft);
+        transaction.objectStore('meta').delete('before-restore');
+      };
+      return () => found;
+    }),
     put: paper => runTransaction('papers', 'readwrite', transaction => {
       putPaperRecord(transaction, paper);
     }),

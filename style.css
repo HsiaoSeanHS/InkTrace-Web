@@ -2011,3 +2011,13 @@ body.writing-mode {
     touch-action: pan-y;
   }
 }
+
+.backup-controls {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  margin: 20px 0 0;
+  padding: 12px;
+  min-width: 0;
+}
+.backup-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.backup-controls .hint { overflow-wrap: anywhere; }

@@ -116,11 +116,11 @@
   let shoujinFontLoaded = false;
   let githubSettings = {
     configured: false,
-    owner: '',
-    repo: '',
+    ...InkTraceGitHub.repository,
     branch: 'main'
   };
   let isUpdatingSettings = false;
+  let dataReady = false;
   let theme = 'system';
 
   const getUploadDestination = () => githubSettings.owner && githubSettings.repo
@@ -968,7 +968,7 @@
     }
     if (!githubSettings.configured) {
       showSettings();
-      showSettingsMessage('請先儲存 GitHub 設定。');
+      showSettingsMessage('請先在個人資料管理儲存 Token。');
       return;
     }
 
@@ -1133,8 +1133,6 @@
   }
 
   function showSettings() {
-    getElement('owner').value = githubSettings.owner;
-    getElement('repo').value = githubSettings.repo;
     getElement('token').value = '';
     getElement('remember-token').checked = Boolean(githubSettings.rememberToken);
     updateTokenStorageStatus();
@@ -1167,7 +1165,7 @@
   }
   getElement('settings-form').onsubmit = runSettingsAction(async () => {
     const token = getElement('token').value.trim() || githubSettings.token || '';
-    const result = InkTraceGitHub.configure(getElement('owner').value.trim(), getElement('repo').value.trim(), token);
+    const result = InkTraceGitHub.configure(InkTraceGitHub.repository.owner, InkTraceGitHub.repository.repo, token);
     result.rememberToken = getElement('remember-token').checked;
     const saved = { owner: result.owner, repo: result.repo };
     if (result.rememberToken) {
@@ -1186,8 +1184,6 @@
   });
   getElement('check').onclick = runSettingsAction(async () => {
     if (
-      getElement('owner').value.trim() !== githubSettings.owner ||
-      getElement('repo').value.trim() !== githubSettings.repo ||
       getElement('token').value ||
       getElement('remember-token').checked !== Boolean(githubSettings.rememberToken)
     ) {
@@ -1203,12 +1199,101 @@
     } catch {
       throw Error('無法清除已儲存的設定，請確認瀏覽器允許存取網站資料。');
     }
-    setGithub({ configured: false, owner: '', repo: '' });
-    getElement('owner').value = getElement('repo').value = getElement('token').value = '';
+    setGithub({ configured: false, ...InkTraceGitHub.repository });
+    getElement('token').value = '';
     getElement('remember-token').checked = false;
     updateTokenStorageStatus();
     showSettingsMessage('已清除。');
   });
+  getElement('settings-dialog').addEventListener('cancel', event => {
+    if (isUpdatingSettings) event.preventDefault();
+  });
+
+  function requireSavedConnection() {
+    if (!githubSettings.configured) throw Error('請先儲存 Token。');
+    if (getElement('token').value || getElement('remember-token').checked !== Boolean(githubSettings.rememberToken)) {
+      throw Error('請先儲存變更的 Token 設定。');
+    }
+  }
+
+  async function snapshot() {
+    if (!dataReady) throw Error('資料尚未載入完成，請稍後重試。');
+    if (uploadingBoard) throw Error('請等上傳完成後再備份。');
+    finishAllStrokes();
+    // Await the writes directly so storage failures cannot produce an incomplete backup.
+    if (activePaper) {
+      await PaperStore.put(activePaper);
+      const draft = activePaper.drafts[characterIndex];
+      if (draft) await PaperStore.putDraft(activePaper.id, characterIndex, draft);
+    }
+    return InkTraceBackup.create(await PaperStore.all());
+  }
+
+  function reloadPapers(restored) {
+    papers = restored;
+    activePaper = null;
+    characterListPaper = null;
+    document.body.classList.remove('writing-mode');
+    getElement('editor').hidden = getElement('view-progress').hidden = true;
+    getElement('home').hidden = false;
+    renderHome();
+    showMessage('');
+  }
+
+  async function restoreBackup(raw) {
+    if (!dataReady) throw Error('資料尚未載入完成，請稍後重試。');
+    const backup = InkTraceBackup.parse(raw);
+    if (!confirm(`還原 ${new Date(backup.createdAt).toLocaleString('zh-TW')} 的備份（${backup.papers.length} 份稿紙）？\n將取代本機全部稿紙、草稿和進度。還原前資料會保留，可用「復原上次還原」取回。`)) {
+      showSettingsMessage('已取消還原。');
+      return;
+    }
+    await snapshot();
+    await PaperStore.replaceAll(backup);
+    reloadPapers(await PaperStore.all());
+    showSettingsMessage(`已還原 ${backup.papers.length} 份稿紙。`);
+  }
+
+  getElement('backup-repo').onclick = runSettingsAction(async () => {
+    requireSavedConnection();
+    showSettingsMessage('正在備份到 Repo…');
+    const backup = await snapshot();
+    await InkTraceGitHub.backup(githubSettings, backup);
+    showSettingsMessage(`已備份 ${backup.papers.length} 份稿紙至 backups/latest.json。`);
+  });
+  getElement('restore-repo').onclick = runSettingsAction(async () => {
+    requireSavedConnection();
+    showSettingsMessage('正在讀取 Repo 備份…');
+    await restoreBackup(await InkTraceGitHub.restore(githubSettings));
+  });
+  getElement('download-backup').onclick = runSettingsAction(async () => {
+    const backup = await snapshot();
+    const url = URL.createObjectURL(new Blob([JSON.stringify(backup)], { type: 'application/json;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `inktrace-backup-${backup.createdAt.replace(/[:.]/g, '-')}.json`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+    showSettingsMessage('已下載備份。');
+  });
+  getElement('restore-file').onclick = () => getElement('backup-file').click();
+  getElement('backup-file').onchange = runSettingsAction(async () => {
+    const input = getElement('backup-file');
+    const file = input.files[0];
+    input.value = '';
+    if (!file) return;
+    if (file.size > InkTraceBackup.maxBytes) throw Error('備份檔案限 20 MB。');
+    await restoreBackup(await file.text());
+  });
+  getElement('undo-restore').onclick = runSettingsAction(async () => {
+    if (!dataReady) throw Error('資料尚未載入完成，請稍後重試。');
+    if (!confirm('取回上次還原前的全部本機資料？目前資料將被取代，建議先下載備份。')) return;
+    if (!await PaperStore.undoRestore()) throw Error('沒有可復原的還原紀錄。');
+    reloadPapers(await PaperStore.all());
+    showSettingsMessage('已取回上次還原前的資料。');
+  });
+
   getElement('settings-dialog').addEventListener('close', () => {
     getElement('token').value = '';
   });
@@ -1316,32 +1401,14 @@
   };
   applyTheme();
 
-  function startWebAnalytics() {
-    const { origin, pathname } = window.location;
-    if (origin !== 'https://lctung.github.io' ||
-      (pathname !== '/InkTrace-Web' && !pathname.startsWith('/InkTrace-Web/'))) {
-      return;
-    }
-    const token = document.querySelector('meta[name="cloudflare-web-analytics"]')?.content;
-    if (!token) {
-      return;
-    }
-    const beacon = document.createElement('script');
-    beacon.type = 'module';
-    beacon.src = 'https://static.cloudflareinsights.com/beacon.min.js';
-    beacon.dataset.cfBeacon = JSON.stringify({ token });
-    document.head.append(beacon);
-  }
-
   async function init() {
     try {
       await PaperStore.init();
       papers = await PaperStore.all();
+      dataReady = true;
       try {
         const cached = JSON.parse(localStorage.getItem('inktrace-github') || 'null');
-        if (cached && typeof cached.owner === 'string' && typeof cached.repo === 'string') {
-          githubSettings.owner = cached.owner;
-          githubSettings.repo = cached.repo;
+        if (cached && cached.owner === InkTraceGitHub.repository.owner && cached.repo === InkTraceGitHub.repository.repo) {
           if (cached.rememberToken === true && typeof cached.token === 'string') {
             githubSettings = { ...InkTraceGitHub.configure(cached.owner, cached.repo, cached.token), rememberToken: true };
           }
@@ -1359,5 +1426,4 @@
     }
   }
   init();
-  startWebAnalytics();
 })();
