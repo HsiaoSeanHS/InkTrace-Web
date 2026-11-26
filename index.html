@@ -18,6 +18,7 @@
     <script defer src="token-vault.js"></script>
     <script defer src="token-access.js"></script>
     <script defer src="fonts/shoujin-coverage.js"></script>
+    <script defer src="pair-upload.js"></script>
     <script defer src="app.js"></script>
   </head>
 
@@ -138,7 +139,6 @@
                   <button class="button outline" data-action="undo">復原</button>
                   <button class="button outline" data-action="clear">清除</button>
                   <button class="button outline" data-action="download" aria-label="下載硬筆書法 SVG">下載</button>
-                  <button class="button outline" data-action="upload" aria-label="上傳硬筆書法到 GitHub">上傳</button>
                 </div>
               </section>
               <section class="board" data-board="rough" data-locked aria-labelledby="rough-title">
@@ -167,14 +167,13 @@
                     </div>
                     <canvas class="writing-canvas" width="3000" height="3000" aria-label="毛筆書法畫布，中央字格上下左右各延伸一格" aria-disabled="true">
                     </canvas>
-                    <div class="board-lock">請先上傳硬筆書法</div>
+                    <div class="board-lock">請先寫硬筆書法</div>
                   </div>
                 </div>
                 <div class="board-actions">
                   <button class="button outline" data-action="undo">復原</button>
                   <button class="button outline" data-action="clear">清除</button>
                   <button class="button outline" data-action="download" aria-label="下載毛筆書法 SVG">下載</button>
-                  <button class="button outline" data-action="upload" aria-label="上傳毛筆書法到 GitHub">上傳</button>
                 </div>
               </section>
             </div>
@@ -192,6 +191,7 @@
               <a id="github-repo" class="button outline" target="_blank" rel="noopener noreferrer"
                 aria-label="開啟 GitHub 儲存倉庫" hidden>GitHub ↗</a>
               <button id="prev" class="button outline" aria-label="上一字">←</button>
+              <button id="upload-pair" type="button" class="button primary">上傳並下一字</button>
               <button id="next" class="button outline">下一字 →</button>
             </div>
           </div>
@@ -254,7 +254,7 @@
         </details>
         <fieldset class="backup-controls">
           <legend>備份與還原</legend>
-          <p class="hint">包含全部稿紙、草稿筆跡與上傳進度，不包含 Token。Repo 備份位置：backups/latest.json；再次備份會更新此檔，歷史版本保留於 Git。</p>
+          <p class="hint">換裝置前，先在原裝置按「備份到 Repo」，再於新裝置還原。上傳 SVG 不會自動建立完整備份。備份包含全部稿紙、草稿筆跡與上傳進度，不包含 Token；位置為 backups/latest.json，歷史版本保留於 Git。</p>
           <div class="backup-actions">
             <button id="backup-repo" type="button" class="button outline">備份到 Repo</button>
             <button id="restore-repo" type="button" class="button outline">從 Repo 還原</button>

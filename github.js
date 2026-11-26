@@ -188,7 +188,19 @@
   }
 
   async function restore(config) {
-    return request(config, `${backupPath}?ref=main`, undefined, 'raw');
+    try {
+      return await request(config, `${backupPath}?ref=main`, undefined, 'raw');
+    } catch (error) {
+      if (error.status !== 404) throw error;
+      // GitHub also uses 404 for inaccessible repositories/branches. Confirm both
+      // before reporting an absent backup, without requiring write permission.
+      await request(config, '');
+      await request(config, '/branches/main');
+      const missing = Error('Repo 尚無完整備份（backups/latest.json）。請先在保有草稿與進度的裝置按「備份到 Repo」，再於此裝置還原。只上傳 SVG 不會建立進度備份；本機資料未變更。');
+      missing.status = 404;
+      missing.code = 'BACKUP_NOT_FOUND';
+      throw missing;
+    }
   }
 
   root.InkTraceGitHub = { repository, requireSecureContext, configure, check, upload, backup, restore };

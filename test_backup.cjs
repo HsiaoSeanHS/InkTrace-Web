@@ -81,8 +81,14 @@ async function main() {
   await assert.rejects(G.backup(config, backup), /Token/);
   responses.push(ok({ type: 'file', sha: 'old' }), ok({}));
   await assert.rejects(G.backup(config, backup), /未確認/);
-  responses.push({ status: 404 });
-  await assert.rejects(G.restore(config));
+  responses.push({ status: 404 }, ok({ permissions: { push: false } }), ok({ name: 'main' }));
+  await assert.rejects(G.restore(config), error => error.code === 'BACKUP_NOT_FOUND' && /備份到 Repo/.test(error.message));
+  responses.push({ status: 404 }, { status: 404 });
+  await assert.rejects(G.restore(config), error => error.status === 404 && error.code !== 'BACKUP_NOT_FOUND');
+  responses.push({ status: 404 }, ok({}), { status: 404 });
+  await assert.rejects(G.restore(config), error => error.status === 404 && error.code !== 'BACKUP_NOT_FOUND');
+  responses.push({ status: 401 });
+  await assert.rejects(G.restore(config), error => error.status === 401);
   assert.equal(responses.length, 0);
   // Exercise actual response streams; over-limit downloads must be cancelled before parsing.
   let streamCancelled = false;

@@ -338,23 +338,28 @@
     const roughUploaded = inkTrace.done(activePaper, characterIndex, destination, rough.side);
     const released = regularUploaded && roughUploaded && draft.releasedStrokeCount;
     setBoardLocked(regular, regularUploaded);
-    setBoardLocked(rough, !regularUploaded || Boolean(released));
-    rough.lockMessage.textContent = released ? '毛筆已上傳' : '請先上傳硬筆書法';
-
     const targetCount = inkTrace.strokeCount(draft.strokes);
+    setBoardLocked(rough, targetCount === 0 || Boolean(released));
+    rough.lockMessage.textContent = released ? '毛筆已上傳' : '請先寫硬筆書法';
     for (const board of boards) {
       const count = inkTrace.strokeCount(draft[board.fields.strokes]);
-      const showTarget = board === rough && regularUploaded && !released;
+      const showTarget = board === rough && targetCount > 0 && !released;
       const mismatch = showTarget && count !== targetCount;
       board.strokeCount.textContent = showTarget ? `${count} / ${targetCount} 筆` : `${released || count} 筆`;
       const complete = board === regular ? regularUploaded : roughUploaded;
       updateBoardProgress(board, complete, mismatch && count > 0);
 
       for (const button of board.buttons) {
-        const uploadBlocked = button.dataset.action === 'upload' && (complete || mismatch);
-        button.disabled = isUploading || (board === rough && board.locked) || !count || uploadBlocked;
+        button.disabled = isUploading || (board === rough && board.locked) || !count;
       }
     }
+    const pairComplete = regularUploaded && roughUploaded;
+    const hasError = boards.some(board => board.uploadError) || InkTracePairUpload.needsSave(draft);
+    const pairButton = getElement('upload-pair');
+    pairButton.disabled = isUploading || isDrawing() ||
+      (pairComplete ? !hasError : !inkTrace.hasMatchingStrokeCounts(draft));
+    pairButton.textContent = isUploading ? '上傳中…' : pairComplete && hasError ? '重試儲存並繼續' :
+      hasError ? '重試上傳並下一字' : characterIndex === activePaper.chars.length - 1 ? '上傳並完成本字' : '上傳並下一字';
     getElement('prev').disabled = isUploading || characterIndex === 0;
     getElement('next').disabled = isUploading || characterIndex === activePaper.chars.length - 1;
     for (const id of ['view-progress', 'settings', 'add-paper']) {
@@ -788,9 +793,6 @@
           return;
         }
         const action = button.dataset.action;
-        if (action === 'upload') {
-          return uploadBoard(board);
-        }
         finishAllStrokes();
         if (action === 'download') {
           downloadBoard(board);
@@ -810,6 +812,7 @@
     }
   }
 
+  getElement('upload-pair').onclick = uploadPair;
   getElement('prev').onclick = () => selectCharacter(characterIndex - 1);
   getElement('next').onclick = () => selectCharacter(characterIndex + 1);
   getElement('width').oninput = () => {
@@ -878,7 +881,7 @@
     };
   }
 
-  for (const id of ['prev', 'next']) {
+  for (const id of ['prev', 'next', 'upload-pair']) {
     enablePenTap(getElement(id));
   }
   for (const board of boards) {
@@ -956,55 +959,41 @@
     setTimeout(() => URL.revokeObjectURL(url), 30000);
   }
 
-  async function uploadBoard(board) {
-    if (uploadingBoard || !activePaper || board.locked) {
-      return;
-    }
+  async function uploadPair() {
+    if (uploadingBoard || !activePaper) return;
     finishAllStrokes();
-    const ink = getBoardStrokes(board);
+    const paper = activePaper;
+    const index = characterIndex;
     const destination = getUploadDestination();
-    if (board.locked || !inkTrace.strokeCount(ink) ||
-      (board.side === 'rough' && !inkTrace.hasMatchingStrokeCounts(getCurrentDraft())) ||
-      inkTrace.done(activePaper, characterIndex, destination, board.side)) {
+    const draft = getCurrentDraft();
+    if (!inkTrace.pairDone(paper, index, destination) && !inkTrace.hasMatchingStrokeCounts(draft)) {
+      showMessage('請完成左右兩欄，並確認硬筆與毛筆筆畫數相同。', true);
       return;
     }
+    clearUploadErrors();
     showMessage('');
-    board.uploadError = '';
-    uploadingBoard = board;
+    uploadingBoard = boards[0];
     updateEditorControls();
+    let result;
     try {
-      const filename = inkTrace.filenameAt(activePaper, characterIndex);
-      const result = await withGitHubToken(`上傳${board.label}`, async config => {
-        await InkTraceGitHub.check(config);
-        return InkTraceGitHub.upload(
-          config,
-          activePaper.title,
-          activePaper.chars[characterIndex],
-          board.side,
-          inkTrace.svg(ink, {
-            clipToFrame: board.side !== 'rough', framePadding: board.side === 'rough' ? 1 : 0,
-          }),
-          filename,
-        );
-      });
-      getCurrentDraft()[board.fields.upload] = {
-        ...result,
-        filename,
-        svgFormat: inkTrace.svgFormat,
-        signature: inkTrace.signature(ink),
-        title: activePaper.title,
-        destination,
-        at: Date.now(),
-      };
-      await saveCurrentDraft(error => {
-        board.uploadError = `本機紀錄儲存失敗：${error.message}`;
-      });
+      result = await withGitHubToken('上傳左右兩欄', config => InkTracePairUpload.upload({
+        paper, index, destination, config,
+        onProgress: side => {
+          uploadingBoard = boards.find(board => board.side === side);
+          updateEditorControls();
+        },
+      }));
     } catch (error) {
-      board.uploadError = error.message;
+      uploadingBoard.uploadError = error.message;
+      showMessage(error.message, true);
     } finally {
       uploadingBoard = null;
       updateEditorControls();
       fitCanvas();
+    }
+    if (result) {
+      if (result.nextIndex !== null) selectCharacter(result.nextIndex);
+      else showMessage('最後一字的左右兩欄已上傳完成。');
     }
   }
 
