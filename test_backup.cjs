@@ -22,6 +22,12 @@ for (const mutate of [
   b => { b.papers[0].drafts[3] = {}; },
   b => { b.papers[0].drafts[0].strokes[0][0].x = null; },
   b => { b.papers[0].drafts[0].strokes[0][0].width = -1; },
+  b => { b.papers[0].drafts[0].strokes[0][0].x = 1e308; },
+  b => { b.papers[0].drafts[0].strokes[0][0].width = 1e308; },
+  b => { b.papers[0].drafts[0].strokes = Array.from({ length: 100001 }, () => []); },
+  b => { b.papers[0].drafts[0].strokes = [Array(500001).fill({ x: 0, y: 0, width: 1 })]; },
+  b => { b.papers = Array.from({ length: 1001 }, (_, i) => ({ ...b.papers[0], id: `paper-${i}` })); },
+  b => { b.papers = Array.from({ length: 25 }, (_, i) => ({ ...b.papers[0], id: `paper-${i}`, chars: Array(4096).fill('天') })); },
 ]) {
   const damaged = structuredClone(backup);
   mutate(damaged);
@@ -49,7 +55,16 @@ async function main() {
   responses.push({ status: 404 }, ok({ content: { sha: 'new' } }));
   await G.backup(config, backup);
   assert.equal(calls[0].method, 'GET');
+  assert.equal(calls[0].headers.Accept, 'application/vnd.github.object+json');
   assert.equal(calls[1].method, 'PUT');
+  for (const call of calls) {
+    assert.ok(call.url.startsWith('https://api.github.com/repos/HsiaoSeanHS/InkTrace-Web/contents/'));
+    assert.equal(call.headers.Authorization, 'Bearer example_token');
+    assert.equal(call.credentials, 'omit');
+    assert.equal(call.redirect, 'error');
+    assert.equal(call.cache, 'no-store');
+    assert.equal(call.referrerPolicy, 'no-referrer');
+  }
   const created = JSON.parse(calls[1].body);
   assert.equal(created.sha, undefined);
   assert.equal(created.branch, 'main');
@@ -69,6 +84,32 @@ async function main() {
   responses.push({ status: 404 });
   await assert.rejects(G.restore(config));
   assert.equal(responses.length, 0);
+  // Exercise actual response streams; over-limit downloads must be cancelled before parsing.
+  let streamCancelled = false;
+  globalThis.fetch = async () => new Response(new ReadableStream({
+    start(controller) {
+      const bytes = new TextEncoder().encode(JSON.stringify(backup));
+      const split = bytes.findIndex(byte => byte >= 128) + 1;
+      controller.enqueue(bytes.slice(0, split));
+      controller.enqueue(bytes.slice(split));
+      controller.close();
+    },
+  }));
+  assert.deepEqual(B.parse(await G.restore(config)), backup, 'UTF-8 characters can cross chunk boundaries');
+  globalThis.fetch = async () => new Response(new ReadableStream({
+    pull(controller) { controller.enqueue(new Uint8Array(1024 * 1024)); },
+    cancel() { streamCancelled = true; },
+  }));
+  await assert.rejects(G.restore(config), /超過 20 MB/);
+  assert.ok(streamCancelled);
+  streamCancelled = false;
+  globalThis.fetch = async () => new Response(new ReadableStream({
+    cancel() { streamCancelled = true; },
+  }), { headers: { 'Content-Length': B.maxBytes + 1 } });
+  await assert.rejects(G.restore(config), /超過 20 MB/);
+  assert.ok(streamCancelled);
+  globalThis.fetch = async () => new Response(new Uint8Array([0xff]));
+  await assert.rejects(G.restore(config));
   console.log('PASS: backup validation, Unicode round-trip, secret exclusion, Repo create/update/restore and failure handling.');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

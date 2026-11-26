@@ -5,13 +5,18 @@
   function requireValid(condition) {
     if (!condition) throw Error('備份格式不正確或資料損毀，未變更本機資料。');
   }
-  function strokes(value) {
+  function strokes(value, budget) {
     requireValid(Array.isArray(value));
+    budget.lines += value.length;
+    requireValid(budget.lines <= 100000);
     return value.map(line => {
       requireValid(Array.isArray(line));
+      budget.points += line.length;
+      requireValid(budget.points <= 500000);
       return line.map(point => {
         requireValid(object(point) && ['x', 'y', 'width'].every(key => Number.isFinite(point[key])) &&
-          point.width > 0 && (point.move === undefined || typeof point.move === 'boolean'));
+          Math.abs(point.x) <= 10000 && Math.abs(point.y) <= 10000 &&
+          point.width > 0 && point.width <= 1000 && (point.move === undefined || typeof point.move === 'boolean'));
         return { x: point.x, y: point.y, width: point.width, ...(point.move === undefined ? {} : { move: point.move }) };
       });
     });
@@ -33,7 +38,9 @@
   }
   function validate(data) {
     requireValid(object(data) && data.format === 'inktrace-personal-backup' && data.version === 1 &&
-      typeof data.createdAt === 'string' && Number.isFinite(Date.parse(data.createdAt)) && Array.isArray(data.papers));
+      typeof data.createdAt === 'string' && Number.isFinite(Date.parse(data.createdAt)) &&
+      Array.isArray(data.papers) && data.papers.length <= 1000);
+    const budget = { characters: 0, lines: 0, points: 0 };
     const ids = new Set();
     const papers = data.papers.map(paper => {
       requireValid(object(paper) && typeof paper.id === 'string' && paper.id.length > 0 && paper.id.length <= 200 &&
@@ -41,6 +48,8 @@
         paper.chars.every(char => typeof char === 'string' && [...char].length === 1) &&
         Number.isInteger(paper.selected) && paper.selected >= 0 && paper.selected < paper.chars.length &&
         Number.isFinite(paper.createdAt) && paper.createdAt >= 0 && object(paper.drafts));
+      budget.characters += paper.chars.length;
+      requireValid(budget.characters <= 100000);
       ids.add(paper.id);
       requireValid(root.InkTrace.title(paper.title) === paper.title);
       requireValid(JSON.stringify(root.InkTrace.characters(paper.chars.join(''))) === JSON.stringify(paper.chars));
@@ -49,7 +58,7 @@
         requireValid(/^(0|[1-9]\d*)$/.test(index) && Number(index) < paper.chars.length && object(draft));
         const saved = {};
         for (const field of ['strokes', 'roughStrokes']) {
-          if (draft[field] !== undefined) saved[field] = strokes(draft[field]);
+          if (draft[field] !== undefined) saved[field] = strokes(draft[field], budget);
         }
         for (const field of ['uploaded', 'roughUploaded']) {
           if (draft[field] !== undefined) saved[field] = upload(draft[field]);

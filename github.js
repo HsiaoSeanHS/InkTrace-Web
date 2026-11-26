@@ -4,6 +4,14 @@
   const repository = Object.freeze({ owner: 'HsiaoSeanHS', repo: 'InkTrace-Web', branch: 'main' });
   const backupPath = '/contents/backups/latest.json';
 
+  function requireSecureContext() {
+    if (root.top && root.top !== root) throw Error('請直接開啟網站，不能在嵌入頁面中輸入 Token。');
+    if (root.location && (root.isSecureContext !== true ||
+      (root.location.protocol !== 'https:' && !['localhost', '127.0.0.1', '[::1]'].includes(root.location.hostname)))) {
+      throw Error('請使用 HTTPS 網址開啟網站，再輸入 Token。');
+    }
+  }
+
   function configure(owner, repo, token) {
     if (owner !== repository.owner || repo !== repository.repo) {
       throw Error('個人版僅使用 HsiaoSeanHS/InkTrace-Web。');
@@ -25,27 +33,70 @@
     };
   }
 
-  async function request(config, path, body, raw = false) {
-    if (!config.configured) {
-      throw Error('請先設定 GitHub。');
+  async function readBackup(response) {
+    const limit = root.InkTraceBackup.maxBytes;
+    const tooLarge = () => Error('Repo 備份超過 20 MB，已停止下載，未變更本機資料。');
+    if (Number(response.headers?.get('Content-Length')) > limit) {
+      await response.body?.cancel();
+      throw tooLarge();
     }
-    const headers = { Authorization: `Bearer ${config.token}`, Accept: raw ? 'application/vnd.github.raw+json' : 'application/vnd.github+json' };
+    if (!response.body?.getReader) {
+      const raw = await response.text();
+      if (new TextEncoder().encode(raw).length > limit) throw tooLarge();
+      return raw;
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8', { fatal: true });
+    let size = 0;
+    let raw = '';
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        size += value.byteLength;
+        if (size > limit) throw tooLarge();
+        raw += decoder.decode(value, { stream: true });
+      }
+      return raw + decoder.decode();
+    } catch (error) {
+      await reader.cancel().catch(() => {});
+      throw error;
+    } finally {
+      reader.releaseLock();
+    }
+  }
+
+  async function request(config, path, body, format = 'json') {
+    requireSecureContext();
+    if (!config.configured || !config.token) throw Error('請為這次操作輸入 Token。');
+    configure(config.owner, config.repo, config.token);
+    if (config.signal?.aborted) {
+      const error = Error('已取消 GitHub 操作。');
+      error.name = 'TokenCancelledError';
+      throw error;
+    }
+    const headers = { Authorization: `Bearer ${config.token}`, Accept: format === 'raw' ? 'application/vnd.github.raw+json' :
+      format === 'object' ? 'application/vnd.github.object+json' : 'application/vnd.github+json' };
     if (body) {
       headers['Content-Type'] = 'application/json';
     }
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 25000);
+    const cancel = () => controller.abort();
+    config.signal?.addEventListener('abort', cancel, { once: true });
+    const timeout = setTimeout(cancel, 25000);
     try {
       const response = await fetch(`https://api.github.com/repos/${config.owner}/${config.repo}${path}`, {
         method: body ? 'PUT' : 'GET',
         headers,
         body: body ? JSON.stringify(body) : undefined,
         credentials: 'omit',
+        cache: 'no-store',
+        referrerPolicy: 'no-referrer',
         redirect: 'error',
         signal: controller.signal,
       });
       if (response.ok) {
-        return raw ? await response.text() : await response.json();
+        return format === 'raw' ? await readBackup(response) : await response.json();
       }
       const messages = {
         401: 'Token 無效或已過期。',
@@ -58,12 +109,18 @@
       error.status = response.status;
       throw error;
     } catch (error) {
+      if (config.signal?.aborted) {
+        const cancelled = Error('已取消 GitHub 操作。');
+        cancelled.name = 'TokenCancelledError';
+        throw cancelled;
+      }
       if (error.name === 'AbortError' || error instanceof TypeError) {
         throw Error('無法連線 GitHub。若已送出上傳，請先確認倉庫，再重試。');
       }
       throw error;
     } finally {
       clearTimeout(timeout);
+      config.signal?.removeEventListener('abort', cancel);
     }
   }
 
@@ -112,7 +169,7 @@
   async function backup(config, data) {
     let sha;
     try {
-      const existing = await request(config, `${backupPath}?ref=main`);
+      const existing = await request(config, `${backupPath}?ref=main`, undefined, 'object');
       if (existing.type !== 'file' || !existing.sha) throw Error('備份路徑不是一般檔案。');
       sha = existing.sha;
     } catch (error) {
@@ -131,8 +188,8 @@
   }
 
   async function restore(config) {
-    return request(config, `${backupPath}?ref=main`, undefined, true);
+    return request(config, `${backupPath}?ref=main`, undefined, 'raw');
   }
 
-  root.InkTraceGitHub = { repository, configure, check, upload, backup, restore };
+  root.InkTraceGitHub = { repository, requireSecureContext, configure, check, upload, backup, restore };
 })(globalThis);
