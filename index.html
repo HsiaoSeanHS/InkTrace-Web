@@ -15,6 +15,7 @@
     <script defer src="backup.js"></script>
     <script defer src="store.js"></script>
     <script defer src="github.js"></script>
+    <script defer src="token-vault.js"></script>
     <script defer src="token-access.js"></script>
     <script defer src="fonts/shoujin-coverage.js"></script>
     <script defer src="app.js"></script>
@@ -25,13 +26,14 @@
       <a id="home-link" class="brand" href="#home" aria-label="InkTrace 首頁"><span aria-hidden="true">字</span> InkTrace</a>
       <div class="header-actions">
         <button id="view-progress" class="button outline" hidden>查看進度</button>
+        <button id="lock-token" type="button" class="button outline" hidden>鎖定 Token</button>
         <button id="theme" class="button outline">主題：系統</button>
         <button id="settings" class="button outline" title="個人資料管理" aria-label="個人資料管理">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M9 3h6l1 3 3 1 2 5-2 5-3 1-1 3H9l-1-3-3-1-2-5 2-5 3-1Z" />
             <circle cx="12" cy="12" r="3" />
           </svg><span>個人資料管理</span>
-          <i id="connection-dot" aria-label="每次操作授權，不儲存 Token">
+          <i id="connection-dot" aria-label="Token 尚未解鎖">
           </i>
         </button>
         <button id="site-info" type="button" class="button outline" title="網站資訊" aria-label="網站資訊"
@@ -241,12 +243,12 @@
         </div>
         <p class="hint">個人專用 · 程式、SVG 與備份統一存放於
           <a href="https://github.com/HsiaoSeanHS/InkTrace-Web" target="_blank" rel="noopener noreferrer">HsiaoSeanHS/InkTrace-Web ↗</a>（main）。</p>
-        <p class="hint">每次上傳、Repo 備份、還原或測試連線時，才會詢問 Token。僅用於該次操作，不記住裝置；完成、失敗或取消後會清空。</p>
+        <p class="hint">Token 以密碼加密保存在此瀏覽器。每次開啟網頁解鎖一次，即可連續上傳、備份與還原；重新整理或閒置 15 分鐘後需重新解鎖。</p>
         <p id="token-storage-status" class="hint" aria-live="polite"></p>
         <details>
           <summary>設定方式</summary>
           <p>建立 fine-grained token，僅選擇 InkTrace-Web 倉庫並授予 Contents「Read and
-            write」，並設定到期日。Token 建議保存在個人密碼管理器，操作時貼上。同名稿紙、同字上傳會更新原檔。</p>
+            write」，並設定到期日。首次設定 Token 與解鎖密碼，之後只需輸入解鎖密碼。同名稿紙、同字上傳會更新原檔。</p>
           <a href="https://github.com/settings/personal-access-tokens/new" target="_blank"
             rel="noopener noreferrer">建立 Token ↗</a>
         </details>
@@ -266,7 +268,9 @@
         <p id="settings-status" class="form-message" role="status">
         </p>
         <div class="dialog-actions">
-          <button id="clear-settings" type="button" class="button clear">清除舊版 Token 設定</button>
+          <button id="unlock-token" type="button" class="button outline">設定／解鎖 Token</button>
+          <button id="replace-token" type="button" class="button outline">更換 Token／密碼</button>
+          <button id="clear-settings" type="button" class="button clear">清除加密 Token</button>
           <button id="check" type="button" class="button outline">測試連線</button>
         </div>
       </form>
@@ -277,14 +281,20 @@
           <h2 id="token-heading">授權這次 GitHub 操作</h2>
           <button type="button" class="close" data-close="token-dialog" aria-label="取消">×</button>
         </div>
-        <p class="hint">只會傳送至 GitHub API，目標為 HsiaoSeanHS/InkTrace-Web。這次操作結束後不保留 Token。</p>
-        <label>Personal Access Token<input id="token" type="password" autocomplete="off"
-          autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="512" required placeholder="github_pat_…"></label>
-        <p class="hint">使用僅授權此 Repo、具有 Contents 讀寫權限的 fine-grained Token。可從密碼管理器貼上。</p>
+        <p class="hint">僅用於 HsiaoSeanHS/InkTrace-Web。解鎖後可連續上傳；Token 只在每次操作期間短暫解密。</p>
+        <div id="token-setup-fields">
+          <label>Personal Access Token<input id="token" type="password" autocomplete="off"
+            autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="512" placeholder="github_pat_…"></label>
+        </div>
+        <label>解鎖密碼<input id="token-password" type="password" autocomplete="current-password"
+          autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="1024" required></label>
+        <label id="token-confirm-field">確認解鎖密碼<input id="token-password-confirm" type="password" autocomplete="new-password"
+          autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="1024"></label>
+        <p class="hint">首次設定至少 12 個字元。忘記密碼只能清除後重設 Token。密碼與金鑰不會存入瀏覽器儲存空間，也不會傳給 GitHub。</p>
         <p id="token-error" class="form-message error" role="status"></p>
         <div class="dialog-actions">
           <button type="button" class="button outline" data-close="token-dialog">取消</button>
-          <button type="submit" class="button primary">執行這次操作</button>
+          <button id="token-submit" type="submit" class="button primary">解鎖並繼續</button>
         </div>
       </form>
     </dialog>

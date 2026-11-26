@@ -5,19 +5,22 @@
 ## 開始書寫
 
 1. 在本機以 `python3 -m http.server 8000 --bind 127.0.0.1` 啟動，開啟 `http://localhost:8000`；也可使用自己的靜態網站部署網址。
-2. 準備僅授權此 Repo、具有 Contents 讀寫權限並設有到期日的 fine-grained Personal Access Token，保存在個人密碼管理器。帳號與 Repo 已固定於 `github.js` 的 `repository`。開啟「個人資料管理」按「測試連線」，在單次授權視窗貼上 Token。
+2. 準備僅授權此 Repo、具有 Contents 讀寫權限並設有到期日的 fine-grained Personal Access Token，保存在個人密碼管理器。帳號與 Repo 已固定於 `github.js` 的 `repository`。首次開啟「個人資料管理」按「設定／解鎖 Token」，輸入 Token 及至少 12 個字元的解鎖密碼，再按「測試連線」。
 3. 選一份稿紙，先寫「硬筆書法」並上傳，再寫「毛筆書法」。兩邊筆畫數相同時才能上傳毛筆；兩邊都上傳後按「下一字」。
 
-## iPad 單次 Token 授權
+## iPad 加密 Token 與連續上傳
 
-- 使用 iPad Safari 開啟自己的 **HTTPS GitHub Pages 網址**。本機開發僅允許安全的 localhost／loopback 網址，區網 HTTP 網址與 iframe 嵌入頁面不得輸入 Token。
-- 每次上傳硬筆、上傳毛筆、備份到 Repo、從 Repo 還原或測試連線，都會重新詢問 Token。確認後由網頁直接完成該次操作，不需要手動上下載檔案。
-- 確認輸入後立即清空密碼欄位，Token 只在該次操作的記憶體中使用；完成或失敗後清除設定物件中的參照，不寫入 localStorage、sessionStorage、IndexedDB、網址或備份。取消不會啟動 GitHub 操作；換頁離開時會清空輸入、使授權失效並嘗試中止請求。
-- Token 視窗可用 iPad 密碼管理器貼上，沒有額外加密密碼或「記住此裝置」功能。網頁不能控制密碼管理器、剪貼簿或瀏覽器的儲存行為；JavaScript 也無法保證記憶體中的字串已被實體覆寫。
-- 啟動時及每次授權前，會刪除舊版 `inktrace-github` 設定，不讀取或自動使用舊 Token。若刪除失敗，會阻止授權並顯示錯誤；稿紙與草稿不會因此刪除。這不會撤銷 GitHub 端的 Token；若懷疑曾洩漏，應在 GitHub 撤銷並重新建立。
-- 已經送達 GitHub 的寫入不會因為離開頁面或逾時而撤銷。遇到連線錯誤，請先確認 Repo 結果再重試。
+- 使用 iPad Safari 開啟自己的 **HTTPS GitHub Pages 網址**。本機開發僅允許安全的 localhost／loopback 網址；區網 HTTP 與 iframe 嵌入頁面不得輸入 Token。
+- 首次設定輸入 Token、解鎖密碼及確認密碼。解鎖密碼需至少 12 個字元，建議使用獨立的長密碼。網頁以 Web Crypto 的 PBKDF2-SHA256（600,000 次、隨機 16-byte salt）衍生不可匯出的 AES-256-GCM 金鑰；每次保存使用隨機 12-byte IV，並將密文綁定目前 Repo。
+- Local Storage 的 `inktrace-token-vault-v1` 僅保存版本、演算法、衍生參數、salt、IV、Repo 識別及密文。**不保存明文 Token、密碼或解密金鑰**。Token 與密碼也不納入稿紙備份。
+- 每次重新開啟或重新整理，只需輸入一次解鎖密碼。解鎖後在分頁記憶體保留金鑰，於每次上傳、Repo 備份／還原、測試連線時才短暫解密 Token；操作結束或失敗後清空 Token 設定物件中的參照。硬筆、毛筆和後續字元可連續上傳，網路暫時失敗後重試也不必重新輸入 Token。
+- 頂端「鎖定 Token」會釋放金鑰並嘗試中止尚未完成的 GitHub 操作。閒置 15 分鐘、離開頁面、切到背景超過 5 分鐘後返回，或另一分頁更換／清除加密 Token 時，也會鎖定。收到 GitHub 401（憑證無效或過期）時會鎖定；需到設定更換有效 Token。
+- 「更換 Token／密碼」可重新設定，成功加密寫入前會保留舊密文；取消設定不會刪除舊密文。「清除加密 Token」不影響稿紙與草稿。**忘記密碼無法找回原 Token，需清除後重新設定。**
+- 舊版 `inktrace-github` 明文設定會刪除，不讀取或自動使用其中的 Token。清除舊設定失敗會阻止授權。網頁清除設定不會撤銷 GitHub 端的 Token；若懷疑曾洩漏，應在 GitHub 撤銷並重建。
+- 加密可降低儲存資料被複製時直接取得 Token 的風險；弱密碼仍可能被離線猜測。解鎖後惡意頁面腳本仍可能利用記憶體中的金鑰取得或使用 Token，因此加密無法取代可信任的程式碼與部署環境。JavaScript 也無法保證字串已被實體覆寫；瀏覽器的密碼管理器與剪貼簿由裝置管理。
+- 已送達 GitHub 的寫入不會因為離開頁面或逾時而撤銷。遇到連線錯誤，請先確認 Repo 結果再重試；加密授權不會修復網路或權限問題。
 
-不持久保存憑證可省去本機加密與解鎖流程，但操作期間惡意腳本仍可能取得 Token。本版加入 CSP（只載入同來源腳本，連線限制為同來源與 GitHub API）、拒絕不安全的網頁環境，並對 GitHub 請求禁用快取與重新導向；這些措施不能取代可信任的程式碼與部署環境。Token 的 Repo Contents 寫入權限也可能影響程式檔案，前端固定資料路徑並不構成 GitHub 端的權限隔離。其他 Repo 的 SVG 不會自動搬移。
+本版保留 CSP（同來源腳本，連線限制為同來源與 GitHub API）、HTTPS／嵌入頁面檢查、禁用 API 快取及重新導向。Token 的 Repo Contents 寫入權限也可能影響程式檔案，前端固定資料路徑並不構成 GitHub 端的權限隔離。其他 Repo 的 SVG 不會自動搬移。
 
 這是固定個人 Repo 的靜態工具，沒有登入或限制訪客瀏覽的機制；Repo 寫入需要有權限的 Token。若要限制網頁本身的存取，需使用有登入保護的部署環境。公開 Repo 的 SVG、備份與 Git 歷史也會公開。
 
@@ -48,6 +51,7 @@
 ```sh
 node test_core.cjs
 node test_backup.cjs
+node test_token_vault.cjs
 node test_token_access.cjs
 ```
 

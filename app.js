@@ -118,6 +118,10 @@
   const tokenAccess = InkTraceTokenAccess.create({
     dialog: getElement('token-dialog'), form: getElement('token-form'), input: getElement('token'),
     message: getElement('token-error'), heading: getElement('token-heading'),
+    password: getElement('token-password'), confirmation: getElement('token-password-confirm'),
+    confirmationField: getElement('token-confirm-field'),
+    setupFields: getElement('token-setup-fields'), submitButton: getElement('token-submit'),
+    onChange: updateTokenStorageStatus,
   });
   let isUpdatingSettings = false;
   let dataReady = false;
@@ -1114,7 +1118,23 @@
     } catch {
       throw Error('無法清除舊版 Token 設定。請先在瀏覽器清除本網站的 Token 設定，或允許存取網站儲存空間。');
     }
-    getElement('token-storage-status').textContent = '不保存 Token；舊版儲存的 Token 設定已移除。';
+
+  }
+
+  function updateTokenStorageStatus() {
+    try {
+      const unlocked = tokenAccess.isUnlocked();
+      const saved = tokenAccess.hasSaved();
+      getElement('token-storage-status').textContent = unlocked
+        ? 'Token 已解鎖，可連續上傳。閒置 15 分鐘或離開頁面後鎖定。'
+        : saved ? '已保存加密 Token；輸入解鎖密碼即可使用。' : '尚未設定加密 Token。';
+      getElement('lock-token').hidden = !unlocked;
+      getElement('connection-dot').classList.toggle('connected', unlocked);
+      getElement('connection-dot').setAttribute('aria-label', unlocked ? 'Token 已解鎖' : 'Token 尚未解鎖');
+    } catch {
+      getElement('token-storage-status').textContent = '無法讀取加密 Token，請確認網站儲存權限或清除後重新設定。';
+      getElement('lock-token').hidden = true;
+    }
   }
 
   function withGitHubToken(label, action) {
@@ -1124,6 +1144,7 @@
 
   function showSettings() {
     showSettingsMessage('');
+    updateTokenStorageStatus();
     getElement('settings-dialog').showModal();
   }
   getElement('settings').onclick = showSettings;
@@ -1153,11 +1174,38 @@
   getElement('settings-form').onsubmit = event => event.preventDefault();
   getElement('check').onclick = runSettingsAction(async () => {
     await withGitHubToken('測試 GitHub 連線', config => InkTraceGitHub.check(config));
-    showSettingsMessage('連線成功 · main；這次 Token 已清除。');
+    showSettingsMessage('連線成功 · main；Token 維持解鎖，可繼續上傳。');
   });
   getElement('clear-settings').onclick = runSettingsAction(async () => {
+    if (!confirm('清除加密 Token？稿紙與草稿會保留，之後需重新輸入 Token 與設定密碼。')) return;
+    tokenAccess.forget();
     clearLegacyToken();
-    showSettingsMessage('已清除舊版 Token 設定，不影響稿紙與草稿。');
+    showSettingsMessage('已清除加密 Token。');
+  });
+  getElement('unlock-token').onclick = runSettingsAction(async () => {
+    await withGitHubToken('解鎖', async () => {});
+    showSettingsMessage('Token 已解鎖，可連續上傳。');
+  });
+  getElement('replace-token').onclick = runSettingsAction(async () => {
+    clearLegacyToken();
+    await tokenAccess.run('更換 Token／密碼', async () => {}, true);
+    showSettingsMessage('已更新加密 Token 與解鎖密碼。');
+  });
+  getElement('lock-token').onclick = () => tokenAccess.lock();
+  for (const type of ['pointerdown', 'keydown']) {
+    document.addEventListener(type, () => tokenAccess.touch(), { passive: true });
+  }
+  let tokenHiddenAt = null;
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) tokenHiddenAt = Date.now();
+    else {
+      if (tokenHiddenAt !== null && Date.now() - tokenHiddenAt >= 5 * 60 * 1000) tokenAccess.lock();
+      tokenHiddenAt = null;
+      updateTokenStorageStatus();
+    }
+  });
+  window.addEventListener('storage', event => {
+    if (event.key === InkTraceTokenVault.storageKey || event.key === null) tokenAccess.lock();
   });
   getElement('settings-dialog').addEventListener('cancel', event => {
     if (isUpdatingSettings) event.preventDefault();
@@ -1352,6 +1400,7 @@
     } catch (error) {
       getElement('token-storage-status').textContent = error.message;
     }
+    updateTokenStorageStatus();
     try {
       await PaperStore.init();
       papers = await PaperStore.all();
